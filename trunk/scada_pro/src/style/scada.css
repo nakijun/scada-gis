@@ -1,0 +1,51 @@
+/* CSS file */
+@namespace s "library://ns.adobe.com/flex/spark";
+@namespace mx "library://ns.adobe.com/flex/mx";
+
+.legend 
+{
+	borderSkin: Embed(source="/images/legend.png",
+		scaleGridTop=10, 				
+		scaleGridLeft=1, 
+		scaleGridBottom=170, 
+		scaleGridRight=280
+		);	
+	backgroundRepeat:no-repeat;
+
+}
+.titleWindow
+{
+	border-color: #000000;
+	header-colors: #00FF00, #0000FF; 
+}
+
+.myFontStyle2 {
+	fontFamily:myfont;
+	color:#000000;
+	fontSize:12pt;
+}
+.myFontStyle5 {
+	fontFamily:myfont;
+	color:#000000;
+	fontSize:16pt;
+}
+.myFontStyle10 {
+	fontFamily:myfont;
+	color:#000000;
+	fontSize:10pt;
+}
+.myFontStyle11 {
+	fontFamily:myfont;
+	color:#000000;
+	fontSize:11pt;
+}
+.myFontStyle12 {
+	fontFamily:myfont;
+	color:#000000;
+	fontSize:12pt;
+}
+.myFontStyle14 {
+	fontFamily:myfont;
+	color:#000000;
+	fontSize:14pt;
+}
