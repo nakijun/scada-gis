@@ -5,7 +5,7 @@
 	<timerPeriod>15</timerPeriod>
 	<initScale>5</initScale>
 	<initPosition>197711,283044</initPosition>
-	<debug>0</debug>
+	<debug>1</debug>
 	<legend>
 		<eq center="1" region="1" location="1" endline="1" rectifier="1" drainage="1" eleccurr="1" mov="1" rpc="1" />
 		<data>3</data> 
