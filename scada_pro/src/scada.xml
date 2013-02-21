@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+	<serverIP>localhost</serverIP>
+	<xmlDataPath>/XmlData/SCADA_DATA_1207.xml</xmlDataPath>
+	<timerPeriod>15</timerPeriod>
+	<initScale>5</initScale>
+	<initPosition>197711,283044</initPosition>
+	<debug>1</debug>
+	<legend>
+		<eq center="1" region="1" location="1" endline="1" rectifier="1" drainage="1" eleccurr="1" mov="1" rpc="1" />
+		<data>3</data> 
+		<alarm>1</alarm> 
+	</legend>
+	<dummyRectifier>
+		<rectifier EQID="901" EQNAME="김해정류기" HMI_XGIS="192260.237612425" HMI_YGIS="292227.247737725" HMI_LABEL="RIGHT" />
+		<rectifier EQID="902" EQNAME="낙민정류기" HMI_XGIS="208560.290040596" HMI_YGIS="288841.615416861" HMI_LABEL="RIGHT" />
+		<rectifier EQID="903" EQNAME="대연6동정류기" HMI_XGIS="207217.750730118" HMI_YGIS="282646.953344742" HMI_LABEL="RIGHT" />
+		<rectifier EQID="904" EQNAME="웅상정류기" HMI_XGIS="214541.220186212" HMI_YGIS="312215.790175244" HMI_LABEL="RIGHT" />
+		
+		<drainage EQID="905" EQNAME="남포배류기" HMI_XGIS="203223.645588877" HMI_YGIS="277997.649016582" HMI_LABEL="RIGHT" />
+		<drainage EQID="906" EQNAME="냉정배류기" HMI_XGIS="201194.749192125" HMI_YGIS="283906.437674974" HMI_LABEL="RIGHT" />
+		<drainage EQID="907" EQNAME="노포배류기" HMI_XGIS="208452.273432773" HMI_YGIS="297920.4124048" HMI_LABEL="RIGHT" />
+		<drainage EQID="908" EQNAME="대연배류기" HMI_XGIS="208213.62249832" HMI_YGIS="282090.545203877" HMI_LABEL="RIGHT" />
+		<drainage EQID="909" EQNAME="대티배류기" HMI_XGIS="199979.187424314" HMI_YGIS="278510.818824352" HMI_LABEL="RIGHT" />
+		<drainage EQID="910" EQNAME="덕천배류기" HMI_XGIS="200423.730575464" HMI_YGIS="290555.313316002" HMI_LABEL="RIGHT" />
+		<drainage EQID="911" EQNAME="동래배류기" HMI_XGIS="207151.133521433" HMI_YGIS="289811.721776138" HMI_LABEL="RIGHT" />
+		<drainage EQID="912" EQNAME="두실배류기" HMI_XGIS="208354.475351663" HMI_YGIS="295202.919712733" HMI_LABEL="RIGHT" />
+		<drainage EQID="913" EQNAME="민락배류기" HMI_XGIS="211248.887626876" HMI_YGIS="285505.430539748" HMI_LABEL="RIGHT" />
+		<drainage EQID="914" EQNAME="범내배류기" HMI_XGIS="205387.791826478" HMI_YGIS="283297.127842077" HMI_LABEL="RIGHT" />
+		<drainage EQID="915" EQNAME="서면배류기" HMI_XGIS="205449.687487426" HMI_YGIS="284571.767179721" HMI_LABEL="RIGHT" />
+		<drainage EQID="916" EQNAME="해운대배류기" HMI_XGIS="214600.553808507" HMI_YGIS="285364.766061257" HMI_LABEL="RIGHT" />
+	</dummyRectifier>
+	
+</configuration>

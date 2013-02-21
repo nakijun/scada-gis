@@ -1,0 +1,2542 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:Application xmlns:panzoom="org.rockholla.controls.panzoom.*"
+			   xmlns:utils="utils.*"
+			   xmlns:fx="http://ns.adobe.com/mxml/2009"
+			   xmlns:s="library://ns.adobe.com/flex/spark"
+			   xmlns:local="*"
+			   xmlns:mx="library://ns.adobe.com/flex/mx"
+			   xmlns:positioning="org.rockholla.positioning.*"
+			   xmlns:pkg1="pkg1.*"
+			   creationComplete="_onCreationComplete()" creationPolicy="all">
+	
+	<fx:Style>
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx1 "library://ns.adobe.com/flex/halo";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		
+		@font-face {
+			src: url("/font/HYWULM.TTF");
+			fontFamily: "myfont";
+			embedAsCFF: true;
+		}
+		@font-face {
+			src: url("/font/DS-DIGI.TTF");
+			fontFamily: "calcfont";
+			embedAsCFF: true;
+		}
+		@font-face {
+			src: url("/font/DS-DIGIT.TTF");
+			fontFamily: "calcfont1";
+			embedAsCFF: true;
+		}
+		
+		.selectedToggleButtonText{
+			color: #000099;
+			fontWeight:bold;
+		}
+	</fx:Style>
+	<fx:Style source="/style/scada.css" /> 
+	
+	
+	<fx:Script>
+		<![CDATA[
+			import flash.events.TimerEvent;
+			import flash.utils.Timer;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.collections.XMLListCollection;
+			import mx.containers.Form;
+			import mx.containers.FormHeading;
+			import mx.containers.FormItem;
+			import mx.containers.Tile;
+			import mx.controls.Alert;
+			import mx.controls.CheckBox;
+			import mx.controls.Image;
+			import mx.controls.Text;
+			import mx.controls.TextArea;
+			import mx.core.UIComponent;
+			import mx.effects.Sequence;
+			import mx.events.CloseEvent;
+			import mx.events.ItemClickEvent;
+			import mx.events.ListEvent;
+			import mx.events.ScrollEvent;
+			import mx.managers.CursorManager;
+			import mx.managers.PopUpManager;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.rpc.http.mxml.HTTPService;
+			import mx.rpc.soap.mxml.WebService;
+			import mx.rpc.xml.SimpleXMLDecoder;
+			import mx.utils.ArrayUtil;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			
+			import org.rockholla.controls.panzoom.PanZoomContent;
+			import org.rockholla.controls.panzoom.tools.MiniMapNavigator;
+			import org.rockholla.events.PanZoomEvent;
+			import org.rockholla.positioning.Orientation;
+			import org.rockholla.xml.XmlData;
+			
+			import pkg1.*;
+			import pkg1.TitledBorderBox;
+			
+			import spark.components.BorderContainer;
+			import spark.components.Button;
+			import spark.components.TextArea;
+			import spark.events.ListEvent;
+			import spark.core.NavigationUnit;
+
+			
+			private var acRegion:ArrayCollection;
+			private var acLocation:ArrayCollection;
+			
+			private var tool:tools;
+			
+			// 메시지팝업
+			private var winMsg:TitleWindow;
+			
+			// xmlData 설정값
+			private var acConfig:ArrayCollection = new ArrayCollection();
+			private var acRectifierDataDummy:ArrayCollection = new ArrayCollection(); // Dummy 정류기
+			private var acDrainageDataDummy:ArrayCollection = new ArrayCollection(); // Dummy 배류기
+			
+			// 데이타 AC
+			private var acCenterData:ArrayCollection = new ArrayCollection(); // 센타
+			private var acRegionData:ArrayCollection = new ArrayCollection();  // 지구
+			private var acLocationData:ArrayCollection = new ArrayCollection(); // 지역
+			private var acEndlineData:ArrayCollection = new ArrayCollection(); // 관말
+			private var acRectifierData:ArrayCollection = new ArrayCollection(); // 정류기
+			private var acDrainageData:ArrayCollection = new ArrayCollection(); // 배류기
+			private var acEleccurrData:ArrayCollection = new ArrayCollection(); // 전류전위
+			private var acRpcData:ArrayCollection = new ArrayCollection(); // RPC
+			private var acMovData:ArrayCollection = new ArrayCollection(); // MOV
+			
+			// IconBox
+			private var acCenterIconBox:ArrayCollection = new ArrayCollection();
+			private var acRegionIconBox:ArrayCollection = new ArrayCollection();
+			private var acLocationIconBox:ArrayCollection = new ArrayCollection();
+			private var acEndlineIconBox:ArrayCollection = new ArrayCollection();
+			private var acRectifierIconBox:ArrayCollection = new ArrayCollection();
+			private var acDrainageIconBox:ArrayCollection = new ArrayCollection();
+			private var acEleccurrIconBox:ArrayCollection = new ArrayCollection();
+			private var acRpcIconBox:ArrayCollection = new ArrayCollection();
+			private var acMovIconBox:ArrayCollection = new ArrayCollection();
+			
+			private var imgLocal:Image;
+			private var indexViewBox:UIComponent;
+			
+			
+			// 범례
+			private var sequence_legend:Sequence = new Sequence(); 
+			private var flag_legend:Boolean = false;
+			
+			// 팝업창setImage
+			private var sequence_popup:Sequence = new Sequence(); 
+			private var flag_popup:Boolean = false ;
+			
+			// 파일업로드정보
+			private var eqid:String;
+			private var gubun:String;
+			
+			// 웹서비스 주소
+			[Bindable]
+			private var webserviceDL:String;
+			
+			// 파일리스트
+			[Bindable]
+			private var acFileInfo:ArrayCollection = new ArrayCollection();
+			
+			// timer
+			private var timer:Timer;
+			private var interval:int;
+			
+			// config.xml 변수
+			private var serverIP:String;
+			private var xmlDataPath:String;
+			
+			private var dragEvent:DragEvent = new DragEvent();
+			
+			[Bindable]
+			private var lstAC:ArrayCollection = new ArrayCollection();
+			
+			// Flashvars
+			private var fvType:String;
+			private var fvEqid:String;
+			private var bFirstLoad:Boolean = true;
+			
+			// 관련정류기 ( 정류기ID, 정압기ID, 정압기명, PT)
+			private var acPolygon:ArrayCollection = new ArrayCollection();
+			
+			// 정류기명 리스트 - 콤보박스용
+			[Bindable] 
+			private var acRectifierId:ArrayCollection = new ArrayCollection();
+			
+			// 세션체크
+			private var bLogin:Boolean = false;
+			// 관련정류기 리스트박스
+			[Bindable] 
+			private var acList:ArrayCollection= new ArrayCollection();
+			
+			// 축적변수
+			private var nScale:int;
+			
+			// Extent 화면좌표정보
+			private var ptGis1:Point;
+			private var ptGis2:Point;
+			private var ptPixel1:Point;
+			private var ptPixel2:Point;
+			
+			
+			private var uiTest:UIComponent = new UIComponent();
+			
+			// 정보수정 콤보박스 수정할때 내용변경 막음.
+			private var bChangeCboRectifier:Boolean = true;
+			
+			[Bindable]
+			[Embed(source="/images/edit_markertool.png")]
+			private var editMarkerTool:Class;
+			
+			// 초기화
+			protected function _onCreationComplete():void
+			{
+				// Flashvars
+				fvType = parameters.type as String;
+				fvEqid = parameters.eqid as String;
+				
+//				fvType = "5";
+//				fvEqid = "3";
+				
+				winMsg = new setTitleWindow(200, 100, "알림", "XML 데이타 파일을 읽는중입니다...");
+				
+				
+				load_config();
+				// 팝업창
+				panel_popup.x = this.width-panel_popup.width+10;
+				panel_popup.y = (-1)*panel_popup.height-20;
+				
+				
+			}
+			
+			private function doubleClickHandler_Scale(event:MouseEvent):void
+			{
+				if(acConfig[0].debug == "1")
+					windebug.visible = !windebug.visible;
+			}
+			
+			
+			private function debugMsg(msg:String):void{
+				if(windebug.visible) {
+					if(msg=="") lstAC.removeAll();
+					if(lstAC.length > 100) lstAC.removeItemAt(0);
+					lstAC.addItem(msg);
+					
+					scrollToBottom(lstMsg);
+				}
+				
+				function scrollToBottom():void
+				{
+					var delta:Number = 0;
+					var count:int = 0;
+					while (count++ < 10)
+					{
+						lstMsg.validateNow();
+						delta = lstMsg.layout.getVerticalScrollPositionDelta(NavigationUnit.END);
+						lstMsg.layout.verticalScrollPosition += delta;
+						
+						if (delta == 0)
+							break;
+					}
+				}
+			}
+			private function setStatusMsg(msg:String, color:String="black"):void{
+				lblMsg.text = msg;
+				lblMsg.setStyle("color", color);
+			}
+			
+			
+			
+			//------------------------- load config --------------------------------------------------------------------------------
+			private function load_config():void
+			{
+				
+				var httpService:HTTPService = new HTTPService();
+				httpService.url = "scada.xml";
+				httpService.addEventListener(FaultEvent.FAULT, loadSCADAError);
+				httpService.addEventListener(ResultEvent.RESULT, loadSCADAComplete);
+				httpService.addEventListener(SecurityErrorEvent.SECURITY_ERROR, loadSCADASecurityError);
+				httpService.send();
+				
+				
+			}
+			private function loadSCADAComplete(event:ResultEvent):void
+			{
+				var success:Boolean = true;
+				
+				try{
+					acConfig = (event.result.configuration is ArrayCollection) ?
+						event.result.configuration as ArrayCollection :
+						new ArrayCollection(ArrayUtil.toArray(event.result.configuration));
+				
+				
+					// 디버깅창
+					if(acConfig[0].debug == "1"){
+						windebug.visible = true;
+					}
+					
+					debugMsg("version : 20121122_05");
+					
+					// 서버주소
+					if(acConfig[0].serverIP != null && acConfig[0].serverIP != "") serverIP = acConfig[0].serverIP;
+					else throw new Error("server IP값 오류입니다.");
+					
+					// XML 데이타경로
+					if(acConfig[0].xmlDataPath != null && acConfig[0].xmlDataPath != ""){
+						xmlDataPath = acConfig[0].xmlDataPath;
+						
+						//debugMsg("XML 데이타 인자 : appId="+appId+ " , fileName="+xmlDataName);
+					}
+					else throw new Error("xmlDataPath 오류입니다.");
+					
+					// 타이머시간
+					if(acConfig[0].timerPeriod != null && acConfig[0].timerPeriod != "") {
+						interval = int(acConfig[0].timerPeriod);
+						
+						timer = new Timer(interval*1000, 0);
+						timer.addEventListener(TimerEvent.TIMER, timerStart);
+						timer.addEventListener(TimerEvent.TIMER_COMPLETE, timerClose);
+						timer.start(); // 타이머 시작
+						debugMsg("타이머 시작 : " + interval.toString() + " 초"); 
+					}
+					else {
+						throw new Error("timerPeriod값 오류입니다.");
+					}
+					
+					// 범례체크 ...
+					if(acConfig[0].legend != null && acConfig[0].legend != "") {
+						
+						if(acConfig[0].legend.eq != null && acConfig[0].legend.eq != "") {
+							chk_center.selected = (acConfig[0].legend.eq.center != null && acConfig[0].legend.eq.center=="1") ? true : false;
+							chk_region.selected = (acConfig[0].legend.eq.region != null && acConfig[0].legend.eq.region=="1") ? true : false;
+							chk_location.selected = (acConfig[0].legend.eq.location != null && acConfig[0].legend.eq.location=="1") ? true : false;
+							chk_endline.selected = (acConfig[0].legend.eq.endline != null && acConfig[0].legend.eq.endline=="1") ? true : false; 
+							chk_eleccurr.selected = (acConfig[0].legend.eq.eleccurr != null && acConfig[0].legend.eq.eleccurr=="1") ? true : false;
+							chk_rectifier.selected = (acConfig[0].legend.eq.rectifier != null && acConfig[0].legend.eq.rectifier=="1") ? true : false;
+							chk_drainage.selected = (acConfig[0].legend.eq.drainage != null && acConfig[0].legend.eq.drainage=="1") ? true : false;
+							chk_mov.selected = (acConfig[0].legend.eq.mov != null && acConfig[0].legend.eq.mov=="1") ? true : false;
+							chk_rpc.selected = (acConfig[0].legend.eq.rpc != null && acConfig[0].legend.eq.rpc=="1") ? true : false;
+						}
+						// 조회
+						if(acConfig[0].legend.data != null && acConfig[0].legend.data != "") {
+							switch(acConfig[0].legend.data){
+								case 1: rdoData.selectedValue = "pres1"; break;
+								case 2: rdoData.selectedValue = "pres2"; break;
+								case 3: rdoData.selectedValue = "filt"; break;
+								case 4: rdoData.selectedValue = "elec"; break;
+								case 5: rdoData.selectedValue = "eleccur"; break;
+								case 6: rdoData.selectedValue = "elecvolt"; break;
+								case 7: rdoData.selectedValue = "mov2"; break;
+							}
+						}
+						// 알람
+						if(acConfig[0].legend.alarm != null && acConfig[0].legend.alarm != "") {
+							switch(acConfig[0].legend.alarm){
+								case 1: rdoAlarm.selectedValue = "general"; break;
+								case 2: rdoAlarm.selectedValue = "pres1"; break;
+								case 3: rdoAlarm.selectedValue = "pres2"; break;
+								case 4: rdoAlarm.selectedValue = "essential"; break;
+								case 5: rdoAlarm.selectedValue = "elec"; break;
+								case 6: rdoAlarm.selectedValue = "eleccurr"; break;
+								case 7: rdoAlarm.selectedValue = "elecvolt"; break;
+							}
+						}
+						
+					}
+					// 더미정류기 데이타
+					if(acConfig[0].dummyRectifier != null && acConfig[0].dummyRectifier != "") {
+						
+						acRectifierDataDummy = (acConfig[0].dummyRectifier.rectifier is ArrayCollection) ?
+							acConfig[0].dummyRectifier.rectifier as ArrayCollection :
+							new ArrayCollection(ArrayUtil.toArray(acConfig[0].dummyRectifier.rectifier));
+						
+						acDrainageDataDummy = (acConfig[0].dummyRectifier.drainage is ArrayCollection) ?
+							acConfig[0].dummyRectifier.drainage as ArrayCollection :
+							new ArrayCollection(ArrayUtil.toArray(acConfig[0].dummyRectifier.drainage));
+						
+					}
+					
+					// 지도로딩
+					if(acConfig[0].initScale != null && acConfig[0].initScale != "") {
+						nScale =int(acConfig[0].initScale);
+						
+						if(nScale==10) btnScale.selectedIndex = 0; 
+						else if(nScale==5) btnScale.selectedIndex = 1;
+						else if(nScale==1) btnScale.selectedIndex = 2;
+						else throw new Error("initScale값 오류 : " + nScale.toString());
+
+						set_Map();
+						
+					}else {
+						throw new Error("initScale값 오류입니다.");
+					}
+					
+					// 지도이동 (Flashvars 없으면...)
+					debugMsg("넘겨받은 초기이동변수 : type = " + fvType + " ,  eqid = " + fvEqid);
+					if(fvType == null || fvType == "" || fvEqid == null || fvEqid == ""){
+						if(acConfig[0].initPosition != null && acConfig[0].initPosition != ""){
+							var arr:Array =acConfig[0].initPosition.split(",");
+							if(arr.length==2){
+								setPosition(new Point(arr[0],arr[1])); 
+								
+							}else {
+								throw new Error("initPosition값 오류입니다.");
+							}
+						}else {
+							throw new Error("initPosition값 오류입니다.");
+						}
+					}
+					
+					// 세션체크
+					//checkSession();
+					
+					// 보안박스설정
+					Security.loadPolicyFile("http://"+serverIP+"/crossdomain.xml");
+						
+					// 데이타 읽기
+					loadXmlData(); 
+					
+				}catch(e:Error){
+					//Alert.show("에러! scada.xml 파일 로드실패 : " + e.message);
+				}
+			}
+			
+			private function loadSCADAError(event:IOErrorEvent):void{
+				//PopUpManager.removePopUp(winMsg);
+				Alert.show("Error! read scada.xml file. IO Error : " + event.text);
+			}
+			private function loadSCADASecurityError(event:SecurityErrorEvent):void{
+				//PopUpManager.removePopUp(winMsg);
+				Alert.show("Error! Read scada.xml file. Security Error : " + event.text);
+			}
+			
+			//------------------------- 세션체크 --------------------------------------------------------------------------------
+			
+			private function checkSession():void
+			{
+				
+				var httpService:HTTPService = new HTTPService();
+				httpService.url = "http://"+serverIP+"/FlexQuery/CheckSession.aspx";
+				
+				debugMsg('CheckSession 호출 : ' + httpService.url);
+					
+				httpService.addEventListener(FaultEvent.FAULT, faultHandler_checkSession);
+				httpService.addEventListener(ResultEvent.RESULT, loadCheckSessionComplete);
+				
+				var param:Object = new Object();
+				param.dummy = Math.random()*99999999;
+				httpService.send(param);
+			}
+			private function loadCheckSessionComplete(event:ResultEvent):void
+			{
+				//debugMsg("loadCheckSessionComplete() 호출!");
+				
+				if(event.result.Result != null) 
+				{
+					bLogin = event.result.Result as Boolean;
+					
+					debugMsg("체크 로그인 : " + bLogin.toString());
+					
+					if(!bLogin){ // 관리자아니면 정보수정Tab 삭제 
+						if(tabNavigator.contains(infoHmi)){
+							tabNavigator.removeChild(infoHmi);
+						}
+					}else{
+						if(!tabNavigator.contains(infoHmi)){
+							tabNavigator.addChild(infoHmi);
+						}
+					}
+					
+					
+					
+					// 팝업열기
+					panel_popup.visible = true;
+					if(sequence_popup != null ) sequence_popup.end();
+					sequence_popup = new Sequence();
+					sequence_popup.addChild( tool.f_move(panel_popup, this.width-panel_popup.width+10, 0) );
+					sequence_popup.duration = 1500;
+					if(sequence_popup != null ) sequence_popup.play();
+					
+					//						// 데이타 넣기
+					//						this.gubun = gubun;
+					//						this.eqid = eqid;
+					
+					// 드롭다운 수정중에는 안변하게위해서 true=변하게
+					bChangeCboRectifier = true;
+					// 팝업창 정보 입력
+					show_popup_data();
+					
+				}
+				
+			}
+			
+			
+			//------------------------ Timer ----------------------------------------------------------------------
+			
+			private function timerStart(event:TimerEvent):void
+			{			
+				debugMsg("--------------- 타이머 시작 ------------------");
+				
+				loadXmlData();
+			}
+			
+			private function timerClose(event:TimerEvent):void{
+				Alert.show("타이머가 종료되었습니다.");
+			}
+			
+			//------------------------ get data from XML file ----------------------------------------------------------------------
+			
+			private function loadXmlData():void
+			{
+				
+				var httpService:HTTPService = new HTTPService();
+				//httpService.url = "http://"+serverIP+"/FlexQuery/GetXmlData.aspx?appId="+appId+"&fileName="+xmlDataName;
+				httpService.url = "http://"+serverIP+xmlDataPath;
+				httpService.addEventListener(FaultEvent.FAULT, faultHandler_loadXmlData);
+				httpService.addEventListener(ResultEvent.RESULT, loadXmlComplete);
+				
+				var param:Object = new Object();
+				param.dummy = Math.random()*99999999;
+				httpService.send(param);
+				
+				debugMsg("XmlData Path : " + httpService.url); 
+				
+				setStatusMsg("XML 데이타 파일 로딩중...", "red");
+				
+			}				
+			private function loadXmlComplete(event:ResultEvent):void
+			{
+				setStatusMsg("");
+				
+				if(event.result == null || event.result == "" ) 
+				{
+					//Alert.show(xmlDataPath + " 로딩 실패!");
+					debugMsg(xmlDataPath + " 로딩 실패!");
+					
+					//loadXmlData();
+				}
+				else if(event.result.SCADA != null) 
+					load_SCADA(event);
+				else 
+					debugMsg("갱신데이타 없음."); 
+			}
+				
+			private function load_SCADA(event:ResultEvent):void
+			{	
+				var i:int, k:int;
+				var cnt:int = 0;
+				
+				//--------------------------------- Data ArrayCollection --------------------------------------------------------------------------------
+				
+				// initialize Data at ARRAY 
+				acCenterData.removeAll();
+				acRegionData.removeAll();
+				acLocationData.removeAll();
+				acEndlineData.removeAll();
+				acRectifierData.removeAll();
+				acDrainageData.removeAll();
+				acEleccurrData.removeAll();
+				acRpcData.removeAll();
+				acMovData.removeAll();
+				//debugMsg("Data Array 초기화");
+				
+				// get Data Array from XML
+				acCenterData = (event.result.SCADA.CENTER is ArrayCollection) ?
+					event.result.SCADA.CENTER as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.CENTER));
+				
+				acRegionData = (event.result.SCADA.REGION is ArrayCollection) ?
+					event.result.SCADA.REGION as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.REGION));
+				
+				acLocationData = (event.result.SCADA.LOCATION is ArrayCollection) ?
+					event.result.SCADA.LOCATION as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.LOCATION)); 
+				
+				acEndlineData = (event.result.SCADA.ENDLINE is ArrayCollection) ?
+					event.result.SCADA.ENDLINE as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.ENDLINE));
+				// 정류기 
+				acRectifierData = (event.result.SCADA.RECTIFIER is ArrayCollection) ?
+					event.result.SCADA.RECTIFIER as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.RECTIFIER));
+				// Dummy 정류기 
+				for each(var obj:Object in acRectifierDataDummy) acRectifierData.addItem(obj);
+				
+				// 배류기
+				for(i=0; i<acRectifierData.length; i++){
+					if(acRectifierData[i]["RECTIFIER_TYPE"] == "배류기"){
+						acDrainageData.addItem(acRectifierData[i]);
+						acRectifierData.removeItemAt(i);
+					}
+				}
+				// Dummy 배류기
+				for each(obj in acDrainageDataDummy) acDrainageData.addItem(obj);
+				
+				// 전류
+				acEleccurrData = (event.result.SCADA.ELECCURR is ArrayCollection) ?
+					event.result.SCADA.ELECCURR as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.ELECCURR));
+				// RPC
+				acRpcData = (event.result.SCADA.RPC is ArrayCollection) ?
+					event.result.SCADA.RPC as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.RPC));
+				// MOV
+				acMovData = (event.result.SCADA.MOV is ArrayCollection) ?
+					event.result.SCADA.MOV as ArrayCollection :
+					new ArrayCollection(ArrayUtil.toArray(event.result.SCADA.MOV));
+				
+				cnt = acCenterData.length + acRegionData.length + acLocationData.length + acEndlineData.length +
+					acRectifierData.length+ acDrainageData.length + acEleccurrData.length + acRpcData.length + acMovData.length;
+				debugMsg("Data Array생성 : " + cnt);
+				
+				
+				
+				//---------------  지도이동 from Flashvars ----------------------------------------------
+				if(bFirstLoad)
+				{
+					// -------------- 정보팝업창 콤보박스용 --------------------------------------------------------
+					acRectifierId.addItem({EQNAME:"- 없음 -", EQID:""});
+					// 정류기추가
+					for each(obj in acRectifierData) acRectifierId.addItem({EQNAME:obj.EQNAME, EQID:obj.EQID});
+					// 배류기추가
+					for each(obj in acDrainageData) acRectifierId.addItem({EQNAME:obj.EQNAME, EQID:obj.EQID});
+					
+					// sort
+					var sort:Sort = new Sort();
+					sort.fields = [new SortField("EQNAME", false)];
+					acRectifierId.sort = sort;
+					acRectifierId.refresh();
+					
+					//-------------- 변수에의한 지도이동 ---------------------------------------------------------------
+					if(fvType != null && fvType != "" && fvEqid != null && fvEqid != "")
+					{
+						
+						
+						
+						var idx:int;
+						var acData:ArrayCollection;
+						
+						if(fvType=="5"){
+							acData = acRectifierData;  // 정류기
+							idx = Utils.findIndex(acData, "EQID", int(fvEqid)); 
+							if(idx==-1){
+								acData = acDrainageData; // 배류기
+								idx = Utils.findIndex(acData, "EQID", int(fvEqid)); 
+							}
+						}else{
+							switch(fvType){
+								case "6": acData = acCenterData; break; // center
+								case "1": acData = acRegionData ; break; // region
+								case "2": acData = acLocationData ; break; // location
+								case "4": acData = acEndlineData;  break; // endline
+								case "8": acData = acEleccurrData; break; // eleccurr
+								case "3": acData = acMovData; break; // mov
+								case "7": acData = acRpcData; break; // RPC
+							}
+							idx = Utils.findIndex(acData, "EQID", int(fvEqid)); 
+						}
+						
+						if(idx != -1 && acData[idx]["HMI_XGIS"] != null && acData[idx]["HMI_YGIS"] != null){
+							debugMsg("[플래시 초기이동 위치] X: " + acData[idx]["HMI_XGIS"] + " ,  Y : " + acData[idx]["HMI_YGIS"]);
+							setPosition(new Point(Number(acData[idx]["HMI_XGIS"]), Number(acData[idx]["HMI_YGIS"]))); 
+						}
+						
+						
+						// 범례 시설물 모두해제 하고, 해당된것만 체크하기
+						chk_center.selected = false;
+						chk_region.selected = false;
+						chk_location.selected = false;
+						chk_endline.selected = false;
+						chk_rectifier.selected = false;
+						chk_drainage.selected = false;
+						chk_eleccurr.selected = false;
+						chk_mov.selected = false;
+						chk_rpc.selected = false;
+						
+						switch(fvType){
+							case "6": chk_center.selected = true; break;
+							case "1": chk_region.selected = true; break;
+							case "2": chk_location.selected = true; break;
+							case "4": chk_endline.selected = true; break;
+							case "5": chk_rectifier.selected = true; chk_drainage.selected = true; break;
+							case "8": chk_eleccurr.selected = true; break;
+							case "3": chk_mov.selected = true; break;
+							case "7": chk_rpc.selected = true; break;
+						}
+							
+						
+					}
+					
+					//--------------- 폴리곤 아이콘 박스 모두그리기 ----------------------------
+					displayPolygonIconBox();
+					
+
+				}else{// Not firstLoad
+					// Extent
+					ptPixel1 = new Point(this.panzoom.panHorizontalScrollBar.scrollPosition,  this.panzoom.panVerticalScrollBar.scrollPosition);
+					ptPixel2 = new Point(ptPixel1.x + this.panzoom.width, ptPixel1.y + this.panzoom.height);
+					ptGis1 = Utils.convertToGeo(ptPixel1.x, ptPixel1.y);
+					ptGis2 = Utils.convertToGeo(ptPixel2.x, ptPixel2.y);
+					
+					
+					//--------------- 폴리곤 아이콘 박스 Extent그리기 ----------------------------
+					displayPolygonIconBoxExtent();
+				}
+				
+				// 정보창 실시간데이타 변경위해서.
+				if(panel_popup.visible)
+				{				
+					show_popup_data();
+				}
+				
+				if(bFirstLoad) 
+					bFirstLoad = false;
+			}
+			
+			private function checkIconBoxExtent(acIconBox:ArrayCollection, arrExtent:Array):int{
+				var cnt:int = 0;
+				var i:int;
+				
+				for(i=0; i<acIconBox.length; i++){
+					var x:Number = acIconBox[i]["pt"].x;
+					var y:Number = acIconBox[i]["pt"].y;
+					if(x > ptPixel1.x && x < ptPixel2.x && y > ptPixel1.y && y < ptPixel2.y){
+						acIconBox[i]["extent"] = true;
+						cnt++;
+					}
+					else 
+						acIconBox[i]["extent"] = false;
+				}
+				
+				return cnt;
+			}
+				
+
+			private function moveData(acData:ArrayCollection, acDataExtent:ArrayCollection):int{
+				var cnt:int = 0;
+				var obj:Object;
+				var x:Number, y:Number;
+				for each(obj in acData){
+					x = obj["HMI_XGIS"];
+					y = obj["HMI_YGIS"];
+					if(x > ptGis1.x && x < ptGis2.x && y > ptGis2.y && y < ptGis1.y){
+						acDataExtent.addItem(obj);
+						cnt++;
+					}
+				}
+				return cnt;
+			}
+			private function removeIconBoxfromMapExtent(acIconBox:ArrayCollection):int{
+				var cnt:int = 0;
+				var obj:Object;
+				var x:Number, y:Number;
+				for each(obj in acIconBox){
+					x = obj["pt"].x;
+					y = obj["pt"].y;
+					if(x > ptPixel1.x && x < ptPixel2.x && y > ptPixel1.y && y < ptPixel2.y){
+						if(obj["icon"]!=null && this.panzoom.content.contains(obj["icon"])) {
+							this.panzoom.content.removeChild(obj["icon"]); 
+							this.panzoom.content.removeChild(obj["box"]); 
+							cnt++;
+						}
+					}
+				}
+				return cnt;
+			}
+
+			
+			private function displayPolygonIconBox():void
+			{	
+				var i:int, k:int;
+				var cnt:int = 0;
+				var cntIcon:int = 0;
+				var cntBox:int = 0;
+				
+				
+				
+				//------------------------ 화면에서 Polygon 삭제 ---------------------------------------------------------------------
+				var cntPolygon:int = 0;
+				if(chk_polygon.selected){
+					cntPolygon += removeChildfromMap(acRectifierIconBox, "polygon");
+					cntPolygon += removeChildfromMap(acDrainageIconBox, "polygon");
+				}
+				//------------------------ 화면에서 Icon, Box 삭제 ---------------------------------------------------------------------
+				cnt = 0;
+				cnt += removeIconBoxfromMap(acCenterIconBox);
+				cnt += removeIconBoxfromMap(acRegionIconBox);
+				cnt += removeIconBoxfromMap(acLocationIconBox);
+				cnt += removeIconBoxfromMap(acEndlineIconBox);
+				cnt += removeIconBoxfromMap(acRectifierIconBox);
+				cnt += removeIconBoxfromMap(acDrainageIconBox);
+				cnt += removeIconBoxfromMap(acEleccurrIconBox);
+				cnt += removeIconBoxfromMap(acMovIconBox);
+				cnt += removeIconBoxfromMap(acRpcIconBox);
+				debugMsg("화면제거 : IconBox=" + cnt + " , Polygon="+cntPolygon );
+				
+				//--------------------------------- create POLIGON, ICON, BOX  ArrayCollection  -----------------------------------------------------------------------------
+				
+				// IconBox ArrayCollection 초기화
+				acCenterIconBox.removeAll();
+				acRegionIconBox.removeAll();
+				acLocationIconBox.removeAll();
+				acEndlineIconBox.removeAll();
+				acRectifierIconBox.removeAll();
+				acDrainageIconBox.removeAll();
+				acEleccurrIconBox.removeAll();
+				acMovIconBox.removeAll();
+				acRpcIconBox.removeAll();
+				debugMsg("Image Array 초기화");
+				
+				// Icon,  Box 생성
+				create_IconBox("center", acCenterData, acCenterIconBox);
+				create_IconBox("region", acRegionData, acRegionIconBox);
+				create_IconBox("location", acLocationData, acLocationIconBox);
+				create_IconBox("endline", acEndlineData, acEndlineIconBox);
+				create_IconBox("rectifier", acRectifierData, acRectifierIconBox);
+				create_IconBox("drainage", acDrainageData, acDrainageIconBox);
+				create_IconBox("eleccurr", acEleccurrData, acEleccurrIconBox);
+				create_IconBox("rpc", acRpcData, acRpcIconBox);
+				create_IconBox("mov", acMovData, acMovIconBox);
+				
+				// Poligon 생성
+				cntPolygon = create_Polygon();
+				
+				
+				var cntIconBox:int = acCenterIconBox.length + acRegionIconBox.length + acLocationIconBox.length + acEndlineIconBox.length +
+					acRectifierIconBox.length+ acDrainageIconBox.length + acEleccurrIconBox.length + acRpcIconBox.length + acMovIconBox.length;
+				debugMsg("Image Array생성 : IconBox=" + cntIconBox + " , Polygon=" + cntPolygon); 
+				
+				//---------------------------------  지도에 POLYGON, ICON, BOX 올리기  -----------------------------------------------------------------------------
+				
+				cntPolygon=0;
+				//if(chk_rectifier.selected) cnt += addChildtoMap(acRectifierIconBox, "polygon");	
+				if(chk_polygon.selected){
+					cntPolygon += addChildtoMap(acRectifierIconBox, "polygon");	
+					cntPolygon += addChildtoMap(acDrainageIconBox, "polygon");	
+				}
+				
+				cntIcon=0;
+				if(chk_center.selected) cntIcon += addChildtoMap(acCenterIconBox, "icon");
+				if(chk_region.selected) cntIcon += addChildtoMap(acRegionIconBox, "icon");
+				if(chk_location.selected) cntIcon += addChildtoMap(acLocationIconBox, "icon");	 
+				if(chk_endline.selected)	 cntIcon += addChildtoMap(acEndlineIconBox, "icon");	
+				if(chk_rectifier.selected)	 cntIcon += addChildtoMap(acRectifierIconBox, "icon");		
+				if(chk_drainage.selected) cntIcon += addChildtoMap(acDrainageIconBox, "icon");		
+				if(chk_eleccurr.selected) cntIcon += addChildtoMap(acEleccurrIconBox, "icon");	
+				if(chk_mov.selected) cntIcon += addChildtoMap(acMovIconBox, "icon");	
+				if(chk_rpc.selected) cntIcon += addChildtoMap(acRpcIconBox, "icon");	
+				
+				cntBox=0;
+				if(chk_center.selected) cntBox += addChildtoMap(acCenterIconBox, "box");
+				if(chk_region.selected) cntBox += addChildtoMap(acRegionIconBox, "box");
+				if(chk_location.selected) cntBox += addChildtoMap(acLocationIconBox, "box");	 
+				if(chk_endline.selected)	 cntBox += addChildtoMap(acEndlineIconBox, "box");	
+				if(chk_rectifier.selected)	 cntBox += addChildtoMap(acRectifierIconBox, "box");		
+				if(chk_drainage.selected) cntBox += addChildtoMap(acDrainageIconBox, "box");		
+				if(chk_eleccurr.selected) cntBox += addChildtoMap(acEleccurrIconBox, "box");	
+				if(chk_mov.selected) cntBox += addChildtoMap(acMovIconBox, "box");	
+				if(chk_rpc.selected) cntBox += addChildtoMap(acRpcIconBox, "box");	
+				debugMsg("화면생성 : Icon=" + cntIcon + ", Box="+cntBox+" , Polygon="+cntPolygon );
+				
+			}
+			
+			private function displayPolygonIconBoxExtent():void
+			{
+				var cnt:int = 0;
+				var cntRectifier:int = 0;
+				var cntDrainage:int = 0;
+				
+				
+				// Polygon 화면삭제 
+				if(chk_polygon.selected){
+					cntRectifier = removeChildfromMap(acRectifierIconBox, "polygon");
+					cntDrainage = removeChildfromMap(acDrainageIconBox, "polygon");
+				}
+				//debugMsg("화면삭제 : 정류기범위=" + cntRectifier + "개, 배류기범위=" + cntDrainage+ "개");
+				
+				
+				// Icon, Box 화면삭제,  AC수정
+				cnt = 0;
+				cnt += updateIconBoxfromMap("center", acCenterData, acCenterIconBox);
+				cnt += updateIconBoxfromMap("region", acRegionData, acRegionIconBox);
+				cnt += updateIconBoxfromMap("location", acLocationData, acLocationIconBox);
+				cnt += updateIconBoxfromMap("endline", acEndlineData, acEndlineIconBox);
+				cnt += updateIconBoxfromMap("rectifier", acRectifierData, acRectifierIconBox);
+				cnt += updateIconBoxfromMap("drainage", acDrainageData, acDrainageIconBox);
+				cnt += updateIconBoxfromMap("eleccurr", acEleccurrData, acEleccurrIconBox);
+				cnt += updateIconBoxfromMap("mov", acMovData, acMovIconBox);
+				cnt += updateIconBoxfromMap("rpc", acRpcData, acRpcIconBox);
+				debugMsg("화면수정 : Icon Box : " + cnt + "개");
+				
+				// Poligon AC 재생성
+				cnt = create_Polygon();
+				debugMsg("AC재생성 : Polygon=" + cnt + "개");
+				
+				//Polygon 화면추가
+				if(chk_polygon.selected){
+					cntRectifier = addChildtoMap(acRectifierIconBox, "polygon");	
+					cntDrainage = addChildtoMap(acDrainageIconBox, "polygon");	
+				}
+				debugMsg("화면추가 : 정류기범위=" + cntRectifier + "개, 배류기범위=" + cntDrainage+ "개");
+				
+				
+				// Icon 화면추가
+				var cntIcon:int = 0;
+				if(chk_center.selected) cntIcon += addChildtoMapExtent(acCenterIconBox, "icon");
+				if(chk_region.selected) cntIcon += addChildtoMapExtent(acRegionIconBox, "icon");
+				if(chk_location.selected) cntIcon += addChildtoMapExtent(acLocationIconBox, "icon");	 
+				if(chk_endline.selected)	 cntIcon += addChildtoMapExtent(acEndlineIconBox, "icon");	
+				if(chk_rectifier.selected)	 cntIcon += addChildtoMapExtent(acRectifierIconBox, "icon");		
+				if(chk_drainage.selected) cntIcon += addChildtoMapExtent(acDrainageIconBox, "icon");		
+				if(chk_eleccurr.selected) cntIcon += addChildtoMapExtent(acEleccurrIconBox, "icon");	
+				if(chk_mov.selected) cntIcon += addChildtoMapExtent(acMovIconBox, "icon");	
+				if(chk_rpc.selected) cntIcon += addChildtoMapExtent(acRpcIconBox, "icon");	
+				// Box 화면추가
+				var cntBox:int = 0;
+				if(chk_center.selected) cntBox += addChildtoMapExtent(acCenterIconBox, "box");
+				if(chk_region.selected) cntBox += addChildtoMapExtent(acRegionIconBox, "box");
+				if(chk_location.selected) cntBox += addChildtoMapExtent(acLocationIconBox, "box");	 
+				if(chk_endline.selected)	 cntBox += addChildtoMapExtent(acEndlineIconBox, "box");	
+				if(chk_rectifier.selected)	 cntBox += addChildtoMapExtent(acRectifierIconBox, "box");		
+				if(chk_drainage.selected) cntBox += addChildtoMapExtent(acDrainageIconBox, "box");		
+				if(chk_eleccurr.selected) cntBox += addChildtoMapExtent(acEleccurrIconBox, "box");	
+				if(chk_mov.selected) cntBox += addChildtoMapExtent(acMovIconBox, "box");	
+				if(chk_rpc.selected) cntBox += addChildtoMapExtent(acRpcIconBox, "box");	
+				debugMsg("화면생성 : Icon=" + cntIcon + "개, Box=" + cntBox + "개");
+				
+			}
+			
+			
+			// ICON BOX생성
+			private function create_IconBox(GUBUN:String, acData:ArrayCollection, acIcon:ArrayCollection):void
+			{
+				var i:int;
+				var pt:Point;
+				var EQID:String, EQNAME:String;
+				var HMI_XGIS:Number, HMI_YGIS:Number;
+				var icon:Image;
+				
+				// ------------- BOX ----------------------------------------------------------------------------------------------------------
+				var box:Box;
+				var pres1:Boolean=false, pres2:Boolean=false, filt:Boolean=false, elec:Boolean=false, eleccurr:Boolean=false, elecvolt:Boolean=false, mov:Boolean=false, endpres:Boolean=false;
+				
+				if(nScale == 1){ // 1만
+					pres1 = val_pres1.selected ? true : false;
+					pres2 = val_pres2.selected ? true : false;
+					filt = val_filt.selected ? true : false;
+					elec = val_elec.selected ? true : false;
+					eleccurr = val_eleccurr.selected ? true : false;
+					elecvolt = val_elecvolt.selected ? true : false;
+					mov = val_mov.selected ? true : false;
+					endpres = val_endpres.selected ? true : false;
+				} else 	if(nScale == 5){ // 5만
+					pres1 = rdoData.selectedValue=="pres1" ? true : false;
+					pres2 = rdoData.selectedValue=="pres2" ? true : false;
+					filt = rdoData.selectedValue=="filt" ? true : false;
+					elec =rdoData.selectedValue=="elec" ? true : false;
+					eleccurr = rdoData.selectedValue=="eleccurr" ? true : false;
+					elecvolt = rdoData.selectedValue=="elecvolt" ? true : false;
+					mov = rdoData.selectedValue=="mov" ? true : false;
+					endpres = rdoData.selectedValue=="endpres" ? true : false;
+				} 
+				// ------------- // BOX ----------------------------------------------------------------------------------------------------------
+				
+				for(i=0; i<acData.length; i++)
+				{
+					// 10만지도일때는 알람인것만 보이게 한다.
+					if(nScale == 10) // 10만
+					{
+						var alarmHL:Object = Utils.getAlarmHL(GUBUN, acData[i]);
+						
+						if(!alarmHL["PRES1_H"] && !alarmHL["PRES1_L"] && !alarmHL["PRES2_H"] && !alarmHL["PRES2_L"] && 
+							!alarmHL["FILT1_H"] && !alarmHL["FILT1_L"] && !alarmHL["ELEC1_H"] && !alarmHL["ELEC1_L"] && 
+							!alarmHL["CURR1_H"] && !alarmHL["CURR1_L"] && !alarmHL["VOLT1_H"] && !alarmHL["VOLT1_L"]) continue;
+					}
+					
+					EQID = acData[i]["EQID"];
+					EQNAME = acData[i]["EQNAME"];
+					HMI_XGIS = acData[i]["HMI_XGIS"];
+					HMI_YGIS = acData[i]["HMI_YGIS"];
+					
+					if(HMI_XGIS != 0 && HMI_YGIS != 0)
+					{
+						//if(bFirstLoad || (HMI_XGIS > ptGis1.x && HMI_XGIS < ptGis2.x && HMI_YGIS > ptGis2.y && HMI_YGIS < ptGis1.y)){
+						pt = Utils.convertToFixel(HMI_XGIS, HMI_YGIS);
+						// Icon
+						icon = new setImage(EQID, GUBUN, rdoAlarm.selectedValue, acData[i], pt);
+						icon.addEventListener(MouseEvent.CLICK, listenerMouseClick_Icon);
+						// Box
+						box = new setBox(GUBUN, pt, acData[i], pres1, pres2, filt, elec, eleccurr, elecvolt, mov, endpres, rdoAlarm.selectedValue, acConfig);
+						// addItem
+						acIcon.addItem({eqid:EQID, eqname:EQNAME, pt:pt, icon:icon, box:box});
+						
+					}
+					
+				}
+				
+			}
+			
+			
+			private function updateIconBoxfromMap(gubun:String, acData:ArrayCollection, acIconBox:ArrayCollection):int
+			{
+				var obj:Object;
+				var x:Number, y:Number;
+				var cnt:int = 0;
+				
+				for(var i:int=0; i<acIconBox.length; i++)
+				{
+					x = acIconBox[i]["pt"].x;
+					y = acIconBox[i]["pt"].y;
+					
+					if(x > ptPixel1.x && x < ptPixel2.x && y > ptPixel1.y && y < ptPixel2.y)
+					{
+						if(acIconBox[i]["icon"]!=null && this.panzoom.content.contains(acIconBox[i]["icon"])) 
+						{
+							//지도삭제
+							this.panzoom.content.removeChild(acIconBox[i]["icon"]); 
+							this.panzoom.content.removeChild(acIconBox[i]["box"]); 
+							// obj생성 ahnks
+							var idx:int = Utils.findIndex(acData, "EQID", acIconBox[i]["eqid"]);
+							if(idx != -1)
+							{
+								obj = create_IconBoxExtent(gubun, acData[idx]);
+								acIconBox.setItemAt(obj, i);
+								// 지도추가
+								//this.panzoom.content.addChild(obj["icon"]);
+								//this.panzoom.content.addChild(obj["box"]);
+								
+								cnt++;
+							}
+							
+						}
+					}
+					
+				}
+				return cnt;
+				
+			}
+			
+			
+			// 지도에서 child 제거
+			private function removeChildfromMap(acIconBox:ArrayCollection, attr:String):int
+			{
+				var cnt:int = 0;
+				
+				for(var i:int=0; i<acIconBox.length; i++)	{
+					if(acIconBox[i][attr]!=null && this.panzoom.content.contains(acIconBox[i][attr])) {
+						this.panzoom.content.removeChild(acIconBox[i][attr]); 
+						cnt++;
+					}
+				}
+				return cnt;
+			}
+			private function removeIconBoxfromMap(acIconBox:ArrayCollection, acExtent:Array=null):int
+			{
+				var cnt:int = 0;
+				var obj:Object;
+				var x:Number, y:Number;
+				
+				for each(obj in acIconBox){
+					if(obj["icon"]!=null && this.panzoom.content.contains(obj["icon"])) {
+						this.panzoom.content.removeChild(obj["icon"]); 
+						this.panzoom.content.removeChild(obj["box"]); 
+						cnt++;
+					}
+				}
+				return cnt;
+			}
+			// 지도위에 child 추가
+			private function addChildtoMap(acIconBox:ArrayCollection, attr:String):int
+			{
+				var cnt:int = 0;
+				var obj:Object;
+				
+				for each(obj in acIconBox){
+					if(obj[attr]!=null) {
+						this.panzoom.content.addChild(obj[attr]); 
+						cnt++;
+					}
+				}
+				return cnt;
+			}
+			// 지도위에 child 추가
+			private function addChildtoMapExtent(acIconBox:ArrayCollection, attr:String):int
+			{
+				var cnt:int = 0;
+				var obj:Object;
+				var x:Number, y:Number;
+				
+				for each(obj in acIconBox){
+					x = obj["pt"].x;
+					y = obj["pt"].y;
+					if(x > ptPixel1.x && x < ptPixel2.x && y > ptPixel1.y && y < ptPixel2.y){
+						if(obj[attr]!=null) {
+							this.panzoom.content.addChild(obj[attr]); 
+							cnt++;
+						}
+					}
+				}
+				return cnt;
+			}
+			
+			
+			
+			
+			
+			// ICON 생성
+			private function create_IconBoxExtent(GUBUN:String, item:Object):Object
+			{
+				var i:int;
+				var pt:Point;
+				var EQID:String, EQNAME:String;
+				var HMI_XGIS:Number, HMI_YGIS:Number;
+				var icon:Image;
+				var obj:Object = null;
+				
+				// ------------- BOX ----------------------------------------------------------------------------------------------------------
+				var box:Box;
+				var pres1:Boolean=false, pres2:Boolean=false, filt:Boolean=false, elec:Boolean=false, eleccurr:Boolean=false, elecvolt:Boolean=false, mov:Boolean=false, endpres:Boolean=false;
+				
+				if(nScale == 1){ // 1만
+					pres1 = val_pres1.selected ? true : false;
+					pres2 = val_pres2.selected ? true : false;
+					filt = val_filt.selected ? true : false;
+					elec = val_elec.selected ? true : false;
+					eleccurr = val_eleccurr.selected ? true : false;
+					elecvolt = val_elecvolt.selected ? true : false;
+					mov = val_mov.selected ? true : false;
+					endpres = val_endpres.selected ? true : false;
+				} else 	if(nScale == 5){ // 5만
+					pres1 = rdoData.selectedValue=="pres1" ? true : false;
+					pres2 = rdoData.selectedValue=="pres2" ? true : false;
+					filt = rdoData.selectedValue=="filt" ? true : false;
+					elec =rdoData.selectedValue=="elec" ? true : false;
+					eleccurr = rdoData.selectedValue=="eleccurr" ? true : false;
+					elecvolt = rdoData.selectedValue=="elecvolt" ? true : false;
+					mov = rdoData.selectedValue=="mov" ? true : false;
+					endpres = rdoData.selectedValue=="endpres" ? true : false;
+				} 
+				// ------------- // BOX ----------------------------------------------------------------------------------------------------------
+				
+				// 10만지도일때는 알람인것만 보이게 한다.
+				if(nScale == 10) // 10만
+				{
+					var alarmHL:Object = Utils.getAlarmHL(GUBUN, item);
+					
+					if(!alarmHL["PRES1_H"] && !alarmHL["PRES1_L"] && !alarmHL["PRES2_H"] && !alarmHL["PRES2_L"] && 
+						!alarmHL["FILT1_H"] && !alarmHL["FILT1_L"] && !alarmHL["ELEC1_H"] && !alarmHL["ELEC1_L"] && 
+						!alarmHL["CURR1_H"] && !alarmHL["CURR1_L"] && !alarmHL["VOLT1_H"] && !alarmHL["VOLT1_L"]) return null;
+				}
+
+				EQID = item["EQID"];
+				EQNAME = item["EQNAME"];
+				HMI_XGIS = item["HMI_XGIS"];
+				HMI_YGIS = item["HMI_YGIS"];
+				
+				if(HMI_XGIS != 0 && HMI_YGIS != 0)
+				{
+					pt = Utils.convertToFixel(HMI_XGIS, HMI_YGIS);
+					
+					icon = new setImage(EQID, GUBUN, rdoAlarm.selectedValue, item, pt);
+					icon.addEventListener(MouseEvent.CLICK, listenerMouseClick_Icon);
+					
+					box = new setBox(GUBUN, pt, item, pres1, pres2, filt, elec, eleccurr, elecvolt, mov, endpres, rdoAlarm.selectedValue, acConfig);
+					
+					obj = {eqid:EQID, eqname:EQNAME, pt:pt, icon:icon, box:box};
+				}
+				
+				return obj;
+					
+				
+			}
+			
+			// Box생성
+//			private function create_Box(GUBUN:String, acData:ArrayCollection, acBox:ArrayCollection):void
+//			{
+//				var i:int;
+//				var pt:Point;
+//				var EQID:String;
+//				var HMI_XGIS:Number, HMI_YGIS:Number;
+//				var box:Box;
+//				
+//				var pres1:Boolean=false, pres2:Boolean=false, filt:Boolean=false, elec:Boolean=false, eleccurr:Boolean=false, elecvolt:Boolean=false, mov:Boolean=false;
+//				
+//				if(nScale == 1){ // 1만
+//					pres1 = val_pres1.selected ? true : false;
+//					pres2 = val_pres2.selected ? true : false;
+//					filt = val_filt.selected ? true : false;
+//					elec = val_elec.selected ? true : false;
+//					eleccurr = val_eleccurr.selected ? true : false;
+//					elecvolt = val_elecvolt.selected ? true : false;
+//					mov = val_mov.selected ? true : false;
+//				} else 	if(nScale == 5){ // 5만
+//					pres1 = rdoData.selectedValue=="pres1" ? true : false;
+//					pres2 = rdoData.selectedValue=="pres2" ? true : false;
+//					filt = rdoData.selectedValue=="filt" ? true : false;
+//					elec =rdoData.selectedValue=="elec" ? true : false;
+//					eleccurr = rdoData.selectedValue=="eleccurr" ? true : false;
+//					elecvolt = rdoData.selectedValue=="elecvolt" ? true : false;
+//					mov = rdoData.selectedValue=="mov" ? true : false;
+//				} 
+//				
+//				for(i=0; i<acData.length; i++){
+//					
+//					EQID = acData[i]["EQID"];
+//					HMI_XGIS = acData[i]["HMI_XGIS"];
+//					HMI_YGIS = acData[i]["HMI_YGIS"];
+//					
+//					// create_Icon에서 안만든것은 Skip (10만지도)
+//					var idx:int = Utils.findIndex(acBox, "eqid", EQID);
+//					if(idx == -1) continue;
+//					
+//					if(HMI_XGIS != 0 && HMI_YGIS != 0){
+//						
+//						pt = Utils.convertToFixel(HMI_XGIS, HMI_YGIS);
+//						box = new setBox(GUBUN, pt, acData[i], 
+//							pres1, pres2, filt, elec, eleccurr, elecvolt, mov, 
+//							rdoAlarm.selectedValue, acConfig);
+//							 
+//						//var idx:int = tool.findIndex(acBox, "eqid", EQID);
+//						acBox[idx]["box"] = box;
+//					}
+//				}
+//			}
+			
+			
+			// Polygon 생성 및 관련정류기정보 수집
+			private function create_Polygon():int
+			{
+				var i:int;
+				var idx:int;
+				var obj:Object;
+				var pt:Point;
+				var RECTIFIERID:int;
+				
+				acPolygon.removeAll();
+				
+				var arrRECTIFIERID:Array = new Array(); 
+				
+				for each(obj in acLocationData){
+					if((obj["RECTIFIERID"] != null || obj["RECTIFIERID2"] != null || obj["RECTIFIERID3"] != null || obj["RECTIFIERID4"] != null) && 
+						(obj["HMI_XGIS"] != null && obj["HMI_YGIS"] != null && obj["HMI_XGIS"] != 0 && obj["HMI_YGIS"] != 0 ))
+					{
+						pt = Utils.convertToFixel(Number(obj["HMI_XGIS"]), Number(obj["HMI_YGIS"]));
+						if(obj["RECTIFIERID"] != null && obj["RECTIFIERID"] != 0)  arrRECTIFIERID.push(obj["RECTIFIERID"]); 
+						if(obj["RECTIFIERID2"] != null && obj["RECTIFIERID2"] != 0 && !isAlready(obj["RECTIFIERID2"])) arrRECTIFIERID.push(obj["RECTIFIERID2"]); 
+						if(obj["RECTIFIERID3"] != null && obj["RECTIFIERID3"] != 0 && !isAlready(obj["RECTIFIERID3"])) arrRECTIFIERID.push(obj["RECTIFIERID3"]); 
+						if(obj["RECTIFIERID4"] != null && obj["RECTIFIERID4"] != 0 && !isAlready(obj["RECTIFIERID4"])) arrRECTIFIERID.push(obj["RECTIFIERID4"]); 
+						
+						for each(RECTIFIERID in arrRECTIFIERID)
+							acPolygon.addItem({rectifierid:RECTIFIERID, eqid:obj["EQID"], eqname:obj["EQNAME"], pt:pt});
+						
+						arrRECTIFIERID.length = 0;
+					}
+				}
+				for each(obj in acEleccurrData){
+					if((obj["RECTIFIERID"] != null || obj["RECTIFIERID2"] != null || obj["RECTIFIERID3"] != null || obj["RECTIFIERID4"] != null) && 
+						(obj["HMI_XGIS"] != null && obj["HMI_YGIS"] != null && obj["HMI_XGIS"] != 0 && obj["HMI_YGIS"] != 0 ))
+					{
+						pt = Utils.convertToFixel(Number(obj["HMI_XGIS"]), Number(obj["HMI_YGIS"]));
+						if(obj["RECTIFIERID"] != null && obj["RECTIFIERID"] != 0) arrRECTIFIERID.push(obj["RECTIFIERID"]); 
+						if(obj["RECTIFIERID2"] != null && obj["RECTIFIERID2"] != 0 && !isAlready(obj["RECTIFIERID2"])) arrRECTIFIERID.push(obj["RECTIFIERID2"]); 
+						if(obj["RECTIFIERID3"] != null && obj["RECTIFIERID3"] != 0 && !isAlready(obj["RECTIFIERID3"])) arrRECTIFIERID.push(obj["RECTIFIERID3"]); 
+						if(obj["RECTIFIERID4"] != null && obj["RECTIFIERID4"] != 0 && !isAlready(obj["RECTIFIERID4"])) arrRECTIFIERID.push(obj["RECTIFIERID4"]); 
+							
+						for each(RECTIFIERID in arrRECTIFIERID)
+							acPolygon.addItem({rectifierid:RECTIFIERID, eqid:obj["EQID"], eqname:obj["EQNAME"], pt:pt});	
+							
+						arrRECTIFIERID.length = 0;	
+					}
+				}
+				
+				
+				// sort
+				var sort:Sort = new Sort();
+				sort.fields = [new SortField("rectifierid", false)];
+				acPolygon.sort = sort;
+				acPolygon.refresh();
+				
+				var acPolygonNew:ArrayCollection = new ArrayCollection();
+				var newObj:Object;
+				var polygon:UIComponent;
+				var cnt:int = 0;
+
+				for (i=0; i<acPolygon.length; i++)
+				{
+					if(newObj ==null){
+						newObj = acPolygon[i];
+					} 
+					else if(acPolygon[i]["rectifierid"] == newObj["rectifierid"]){
+						acPolygonNew.addItem(newObj);
+						newObj = acPolygon[i];
+					}
+					else {
+						acPolygonNew.addItem(newObj);
+						if(acPolygonNew.length > 2 ) insertPolygon(); // 폴리곤 등록 
+						
+						acPolygonNew.removeAll();
+						newObj = acPolygon[i];
+					}
+					
+				}
+				if(newObj != null) 
+				{
+					acPolygonNew.addItem(newObj);
+					insertPolygon(); // 폴리곤 등록
+				}
+				
+				
+				
+				
+				
+//				var acPolygonNew:ArrayCollection = new ArrayCollection();
+//				var polygon:UIComponent;
+//				var cnt:int = 0;
+//				
+//				while(acPolygon.length)
+//				{
+//					var newObj:Object = null;
+//					i = 0;
+//					
+//					while( i< acPolygon.length)
+//					{
+//						if(newObj==null)
+//						{
+//							newObj = acPolygon[i];
+//							acPolygonNew.addItem(acPolygon[i]);
+//							acPolygon.removeItemAt(i);
+//							
+//						}
+//						else if (acPolygon[i]["rectifierid"] == newObj["rectifierid"])
+//						{
+//							acPolygonNew.addItem(acPolygon[i]);
+//							acPolygon.removeItemAt(i);
+//						}
+//						else
+//						{
+//							i++;
+//						}
+//						
+//					}
+//					
+//					if(acPolygonNew.length > 1){
+//						insertPolygon();
+//					}
+//					acPolygonNew.removeAll();
+//					
+//					
+//				}
+				
+				
+				function isAlready(id:int):Boolean
+				{
+					for each(var RECTIFIERID:int in arrRECTIFIERID) if(RECTIFIERID == id) return true;
+					return false;
+				}
+				
+				
+				function insertPolygon():void
+				{
+					// 해당 정류기도 포함
+					var acIconBox:ArrayCollection = new ArrayCollection();
+					idx = Utils.findIndex(acRectifierIconBox, "eqid", acPolygonNew[0]["rectifierid"]);
+					if(idx != -1) acIconBox = acRectifierIconBox;
+					else{
+						idx = Utils.findIndex(acDrainageIconBox, "eqid", acPolygonNew[0]["rectifierid"]);
+						if(idx != -1) acIconBox = acDrainageIconBox;
+					}
+					if(idx != -1){
+						// 정류기 추가
+						//pt = Utils.convertToFixel(Number(acData[idx]["HMI_XGIS"]), Number(acData[idx]["HMI_YGIS"]));
+						acPolygonNew.addItem({rectifierid:acIconBox[idx]["eqid"], eqid:acIconBox[idx]["eqid"], eqname:acIconBox[idx]["eqname"], pt:acIconBox[idx]["pt"]}); 
+					}
+					
+					// 폴리곤 생성
+					var polygon:UIComponent = new setPolygon(acPolygonNew);
+					
+					idx = Utils.findIndex(acRectifierIconBox, "eqid", newObj["rectifierid"]);
+					if(idx != -1){
+						acRectifierIconBox[idx]["polygon"] = polygon;
+						cnt++;
+					}else{
+						idx = Utils.findIndex(acDrainageIconBox, "eqid", newObj["rectifierid"]);
+						if(idx != -1){
+							acDrainageIconBox[idx]["polygon"] = polygon;
+							cnt++;
+						}
+					}
+				}
+				
+				return cnt;
+				
+			}
+			
+			private function showPolygon():void
+			{
+				var cntRectifier:int = 0;
+				var cntDrainage:int = 0;
+				
+				if(chk_polygon.selected){
+					cntRectifier = addChildtoMap(acRectifierIconBox, "polygon");	
+					cntDrainage = addChildtoMap(acDrainageIconBox, "polygon");	
+					debugMsg("다각형 추가 : 정류기=" + cntRectifier + "개, 배류기=" + cntDrainage+ "개");
+				}
+				else{
+					cntRectifier = removeChildfromMap(acRectifierIconBox, "polygon");
+					cntDrainage = removeChildfromMap(acDrainageIconBox, "polygon");
+					debugMsg("다각형 삭제 : 정류기=" + cntRectifier + "개, 배류기=" + cntDrainage+ "개");
+				}
+			}
+			
+			
+			
+			public function listenerMouseClick_Icon(event:MouseEvent):void
+			{
+				// 정보창 팝업
+				show_popup(event.currentTarget.name, event.currentTarget.id); 
+				// 커서제거
+				UIComponent(event.currentTarget).cursorManager.removeAllCursors();
+			}
+			
+			//------------------------- 지도 관련 ---------------------------------------------------------------------------------------------------------
+			
+			// 축적변경
+			private function clickHandler_ScaleButton(event:ItemClickEvent):void
+			{
+				if(event.index==0) nScale=10; 
+				else if(event.index==1) nScale=5;
+				else if(event.index==2) nScale=1;
+				
+				
+				// 현재위치
+				var ptTm:Point = Utils.convertToGeo(this.panzoom.panHorizontalScrollBar.scrollPosition + (this.panzoom.width/2), this.panzoom.panVerticalScrollBar.scrollPosition + (this.panzoom.height/2));
+				
+				// 기존의 모든 지도, 아이콘,박스 삭제
+				this.panzoom.content.removeAllChildren();
+				
+				// 지도 로딩
+				set_Map();
+				
+				// 위치이동
+				setPosition(ptTm); 
+				
+				// 화면뿌리기
+				displayPolygonIconBox();
+			}
+			
+			
+			//  지도로딩
+			private function set_Map():void
+			{
+				var imageWidth:Number, imageHeight:Number, indexMapHeight:Number;
+				var pt1:Point, pt2:Point, ptTm1:Point, ptTm2:Point;
+				var indexMapSource:String;
+				var indexMapVisible:Boolean;
+				
+				var i:int, k:int;
+				var x:Number=0, y:Number = 0, width:Number, height:Number;
+				
+				if(nScale == 10) // 10만
+				{
+					imageWidth = 1600;
+					imageHeight = 1112;
+					pt1 = new Point(180, 957);
+					pt2 = new Point(1399, 142);
+					ptTm1 = new Point(183442.33, 276466.46);
+					ptTm2 = new Point(222037.71, 302308.51); 
+					
+					indexMapHeight = 104;
+					indexMapSource = "assets/2012_0919_부산전체지도_150.jpg";
+					indexMapVisible = false;
+					
+					// remove Map
+					customPanZoomContent.removeAllChildren();
+					// add Map
+					customPanZoomContent.addChild(new setMap(0, 0, 1600, 1112, "assets/2012_0919_부산전체지도.jpg"));
+					
+					if(vsData.selectedChild == boxCheckData){ // 1Man
+						val_pres1.enabled = false;
+						val_pres2.enabled = false;
+						val_filt.enabled = false;
+						val_elec.enabled = false;
+						val_eleccurr.enabled = false;
+						val_elecvolt.enabled = false;
+						val_mov.enabled = false;
+					}else{ // 5Man
+						rdoData.enabled = false;
+					}
+					
+				} 
+				else if(nScale == 5) // 5만
+				{
+					
+					//imageWidth = 5440; 
+					imageWidth = 6045; // 5440; + 605
+					imageHeight = 6644;
+					pt1 = new Point(7, 12);
+					//pt2 = new Point(5427, 6629);
+					pt2 = new Point(6032, 6629);
+					ptTm1 = new Point(177177.94, 322596.21);
+					//ptTm2 = new Point(222752.44, 267077.74);  // 45574.5 => 268326.94
+					ptTm2 = new Point(227816.2733, 267077.74); 
+					
+					indexMapHeight = 183;
+					indexMapSource = "assets/50000도_2012_07_30A_150.jpg";
+					indexMapVisible = true;
+					
+					// remove Map
+					customPanZoomContent.removeAllChildren();
+					
+					// add Map
+					//customPanZoomContent.addChild(new setMap(0, 0, 5440, 6640, "assets/50000도_2012_07_30A.jpg"));
+					
+					x = 0;
+					y = 0;
+					width =  imageWidth / 10;
+					height = imageHeight / 9;
+					
+					for(k=1; k<=9; k++){
+						x=0;
+						if(k != 1) y += height;
+						
+						for(i=1; i<=10; i++){
+							if(i !=1 ) x += width; 
+							customPanZoomContent.addChild(new setMap(x, y, width, height, "assets/50000도/"+Utils.leadingZero(i, 2)+"-"+Utils.leadingZero(k, 2)+".jpg"));
+						}
+					}
+					
+					// 조회데이타 1개만선택
+					vsData.selectedChild = boxRadioData;
+					rdoData.enabled = true;
+					
+					
+				}
+				else if(nScale == 1) // 1만
+				{
+					imageWidth = 17296;
+					imageHeight = 18957;
+					pt1 = new Point(30, 26);
+					pt2 = new Point(17261, 18926);
+					ptTm1 = new Point(181742.34, 317048.72);
+					ptTm2 = new Point(227263.78, 267105.16); 
+					
+					indexMapHeight = 164;
+					indexMapSource = "assets/10000도_0831_A_150.jpg";
+					indexMapVisible = true;
+					
+					// remove Map
+					customPanZoomContent.removeAllChildren();
+					
+					// add Map
+//					customPanZoomContent.addChild(new setMap(0, 		0, 	5764, 		6311, "assets/9Divide/1-1.jpg"));
+//					customPanZoomContent.addChild(new setMap(5764,  	0, 	5799,  	6311, "assets/9Divide/1-2.jpg"));
+//					customPanZoomContent.addChild(new setMap(11563, 	0, 	5733,  	6311, "assets/9Divide/1-3.jpg"));
+//					customPanZoomContent.addChild(new setMap(0,   		6311,    	5764,  6299, "assets/9Divide/2-1.jpg"));
+//					customPanZoomContent.addChild(new setMap(5764,   	6311,    	5799,  6299, "assets/9Divide/2-2.jpg"));
+//					customPanZoomContent.addChild(new setMap(11563,   6311,		5733,  6299, "assets/9Divide/2-3.jpg"));
+//					customPanZoomContent.addChild(new setMap(0,   		12610,    5764,  6347, "assets/9Divide/3-1.jpg"));
+//					customPanZoomContent.addChild(new setMap(5764,   	12610,    5799,  6347, "assets/9Divide/3-2.jpg"));
+//					customPanZoomContent.addChild(new setMap(11563,    12610,    5733,  6347, "assets/9Divide/3-3.jpg"));
+					
+					x = 0;
+					y = 0;
+					width =  imageWidth / 9;
+					height = imageHeight / 9;
+					
+					for(k=1; k<=9; k++){
+						x=0;
+						if(k != 1) y += height;
+						
+						for(i=1; i<=9; i++){
+							if(i !=1 ) x += width; 
+							customPanZoomContent.addChild(new setMap(x, y, width, height, "assets/10000도/"+Utils.leadingZero(i, 2)+"-"+Utils.leadingZero(k, 2)+".jpg"));
+						}
+					}
+					
+					// 조회데이타
+					vsData.selectedChild = boxCheckData;
+					val_pres1.enabled = true;
+					val_pres2.enabled = true;
+					val_filt.enabled = true;
+					val_elec.enabled = true;
+					val_eleccurr.enabled = true;
+					val_elecvolt.enabled = true;
+					val_mov.enabled = true;
+				}
+				
+				// 지도좌표세팅
+				tool = new tools(imageWidth, imageHeight, pt1, pt2, ptTm1, ptTm2);
+				
+				// 지도크기
+				this.panzoom.content.width = tool.panzoomWidth;
+				this.panzoom.content.height = tool.panzoomHeight;
+				
+				// set IndexMap
+				indexMap.width = 150;
+				indexMap.height = indexMapHeight;
+				// set indexMapImage
+				indexImage.width = 150;
+				indexImage.height = indexMapHeight;
+				indexImage.source = indexMapSource
+				indexBox.height = indexMap.height + 20;
+				indexMap.visible = indexMapVisible;
+				
+			}
+			
+			// 지도이동 
+			private function setPosition(ptTm:Point):void
+			{
+				var ptImg:Point = Utils.convertToFixel(ptTm.x, ptTm.y);
+				
+				this.panzoom.zoomToPoint(ptImg, 1);
+				drawIndexViewBox(ptImg);
+			}
+			
+			// --------------------- 팝업창 ------------------------------------------------------------------------------
+			
+			private function show_popup(gubun:String, eqid:String):void
+			{
+				if(panel_popup.visible)
+				{ 
+					// 팝업닫기
+					panel_popup.visible = false;
+				}
+				else
+				{
+					// 데이타 넣기
+					this.gubun = gubun;
+					this.eqid = eqid;
+					
+					checkSession();
+					
+					// 팝업열기
+//					panel_popup.visible = true;
+//					if(sequence_popup != null ) sequence_popup.end();
+//					sequence_popup = new Sequence();
+//					sequence_popup.addChild( tool.f_move(panel_popup, this.width-panel_popup.width+10, 0) );
+//					sequence_popup.duration = 1500;
+//					if(sequence_popup != null ) sequence_popup.play();
+//					
+//					
+//					
+//					show_popup_data();
+				}
+			}
+			
+			private function show_popup_data():void
+			{
+				var acData:ArrayCollection;
+				switch(this.gubun){
+					case "center": acData = acCenterData; break;
+					case "region": acData = acRegionData; break;
+					case "location": acData = acLocationData; break;
+					case "endline": acData = acEndlineData; break;
+					case "rectifier": acData = acRectifierData; break;
+					case "drainage": acData = acDrainageData; break;
+					case "eleccurr": acData = acEleccurrData; break;
+					case "mov": acData = acMovData; break;
+				}
+				var idx:int = Utils.findIndex(acData, "EQID", this.eqid);
+				if(idx != -1)
+				{
+					var object:Object = acData[idx];
+					
+					// Dummy정압기 여부
+					if(object["CDMARCV"] == null){  
+						pictureHmi.enabled = false;
+						btnChangeInfo.enabled = false;
+						vsInfo.visible=false;
+					}else{
+						pictureHmi.enabled = true;
+						btnChangeInfo.enabled = true;
+						vsInfo.visible=true;
+					}
+					
+					// HMI (시설물데이타)
+					boxHmi.removeAllChildren();
+					boxHmi.addChild(new SetForm(boxHmi.width, boxHmi.height, this.gubun, object, acConfig));
+					
+					// 사진정보 (업로드때필요)
+					acFileInfo.removeAll();
+					lblPictureName.text = "";
+					imgUpload.source = null;
+					
+					// 사진리스트 가져오기
+					getPictureList(this.eqid, this.gubun);
+					
+					// 좌표, 
+					HMI_XGIS.text = object.HMI_XGIS;
+					HMI_YGIS.text = object.HMI_YGIS;
+					
+					// 라벨위치
+					var idxLabel:int =	Utils.findIndex(acLabel, "data", object.HMI_LABEL);
+					cobLabel.selectedIndex = (idxLabel == -1) ? 0 : idxLabel;
+					
+					// 관리자 일때 ahnks
+					if(bLogin)
+					{
+						
+						// location, eleccurr일때 => 관련 정류기이름 드롭다운리스트
+						if(this.gubun=="location" || this.gubun=="eleccurr")
+						{
+							vsInfo.selectedIndex = 0;
+							
+							// SCADA_DATA 재로딩시 적용안하기 위해서 별도 AC구성
+							
+							if(bChangeCboRectifier)
+							{
+								var acRectifierIdTmp:ArrayCollection = new ArrayCollection();
+								for each(obj in acRectifierId) acRectifierIdTmp.addItem(obj);
+								
+								cboRectifier.dataProvider = acRectifierIdTmp;
+								cboRectifier2.dataProvider = acRectifierIdTmp;
+								cboRectifier3.dataProvider = acRectifierIdTmp;
+								cboRectifier4.dataProvider = acRectifierIdTmp;
+								
+								
+								cboRectifier.selectedIndex = 0;
+								cboRectifier2.selectedIndex = 0;
+								cboRectifier3.selectedIndex = 0;
+								cboRectifier4.selectedIndex = 0;
+								
+								var selIndex:int = 0;
+								
+								if(object.RECTIFIERID != null) {
+									selIndex = Utils.findIndex(acRectifierIdTmp, "EQID", object.RECTIFIERID);
+									if(selIndex != -1) cboRectifier.selectedIndex = selIndex;
+								}
+								if(object.RECTIFIERID2 != null) {
+									selIndex = Utils.findIndex(acRectifierIdTmp, "EQID", object.RECTIFIERID2);
+									if(selIndex != -1) cboRectifier2.selectedIndex = selIndex;
+								}
+								if(object.RECTIFIERID3 != null) {
+									selIndex = Utils.findIndex(acRectifierIdTmp, "EQID", object.RECTIFIERID3);
+									if(selIndex != -1) cboRectifier3.selectedIndex = selIndex;
+								}
+								if(object.RECTIFIERID4 != null) {
+									selIndex = Utils.findIndex(acRectifierIdTmp, "EQID", object.RECTIFIERID4);
+									if(selIndex != -1) cboRectifier4.selectedIndex = selIndex;
+								}
+							} // bChangeCboRectifier
+							
+						}
+						
+					
+					
+					
+						
+						// rectifier, drainage일때 => 관련 정압기(location, eleccurr) 표시
+						if(this.gubun=="rectifier" || this.gubun=="drainage")
+						{
+							vsInfo.selectedIndex = 1;
+							
+							acList.removeAll();
+							
+							var eqname:String = "";
+							
+							for each(var obj:Object in acPolygon){
+								if(obj["rectifierid"]== this.eqid){
+									var idxData:int = Utils.findIndex(acLocationData, "EQID", obj["eqid"]);
+									if(idxData != -1) eqname = acLocationData[idxData]["EQNAME"];
+									else{
+										idxData =  Utils.findIndex(acEleccurrData, "EQID", obj["eqid"]);
+										if(idxData != -1) eqname = acEleccurrData[idxData]["EQNAME"];
+									}
+									
+									if(eqname != "")
+										acList.addItem({label:eqname});
+								}
+							}
+							
+						}
+						
+					} // bLogin
+						
+						
+					
+				}
+				
+			}
+			
+			
+			// 사진정보 가져오기
+			private function getPictureList(id:String, gubun:String):void
+			{
+				var httpService:HTTPService = new HTTPService();
+				httpService.url = "http://"+serverIP+"/PictureUpload/GetPictureList.aspx?eqid="+id+"&gubun="+gubun;
+				httpService.addEventListener(FaultEvent.FAULT, faultHandler_getPicture);
+				httpService.addEventListener(ResultEvent.RESULT, getPictureLoadXmlComplete);
+				
+				var param:Object = new Object();
+				param.dummy = Math.random()*99999999;
+				httpService.send(param);
+			}
+			// 사진파일목록가져오기 (혹은 삭제후 목록가져오기)
+			private function getPictureLoadXmlComplete(event:ResultEvent):void
+			{
+				if(event.result.Result != null) // ...
+				{
+					var result:String = event.result.Result;
+					if(result.toLowerCase()=="false" ) 
+					{
+						Alert.show("권한이 없습니다. 로그인을 해주세요");
+					}
+					else	
+					{	
+						acFileInfo = (event.result.Result.File is ArrayCollection) ?
+							event.result.Result.File as ArrayCollection :
+							new ArrayCollection(ArrayUtil.toArray(event.result.Result.File));
+					}
+				}
+			}
+			
+			
+			private function cover_mouseDownHandler(event:MouseEvent):void{ 
+				//if(event.currentTarget.id=="panel_popup" && event.localY < 30)
+				//Alert.show( event.localX + "," + event.localY + ",,," + event.currentTarget.mouseX + "," + event.currentTarget.mouseY );
+				//if( event.localX > 20 && event.localY < 30)
+				if(event.currentTarget.mouseY < 30)
+					panel_popup.startDrag();               
+			}   
+			private function cover_mouseUpHandler(event:MouseEvent):void{                 
+					panel_popup.stopDrag();
+			}
+			private function panel_popup_close(event:CloseEvent):void
+			{    
+				panel_popup.visible = false;
+				
+				if(sequence_popup != null ) sequence_popup.end();
+				sequence_popup = new Sequence();
+				sequence_popup.addChild( tool.f_move(panel_popup, this.width-panel_popup.width+10, (-1)*panel_popup.height-20) );
+				sequence_popup.duration = 1500;
+				if(sequence_popup != null ) sequence_popup.play();
+			}
+			
+			//---------------------- 범례 -----------------------------------------------------------------------
+			
+			private function showLegend():void
+			{
+				if(sequence_legend != null ) sequence_legend.end();
+				sequence_legend = new Sequence();
+				if(!flag_legend){
+					sequence_legend.addChild( tool.f_move(panel_legend, 0, panel_legend.y) );
+					flag_legend = true;
+				}else{
+					sequence_legend.addChild( tool.f_move(panel_legend, -240, panel_legend.y) );
+					flag_legend = false;
+				}
+				sequence_legend.duration = 1500;
+				if(sequence_legend != null ) sequence_legend.play();
+			}
+			
+			//------------------------------ 조회데이타 보이기. ----------------------------------------------------------------------------------
+			
+			private function show_value(event:MouseEvent):void
+			{
+				displayPolygonIconBox();
+				//displayPolygonIconBoxExtent();
+			}
+			
+			private function clickHandler_Data(event:ItemClickEvent):void
+			{
+				displayPolygonIconBox();
+			}
+			
+			
+			//----------------------------- 시설물별 보이기 -------------------------------------------------------------------------
+			
+			// 센터정압기 표시
+			private function showCenter():void
+			{
+				if(chk_center.selected){  
+					addChildtoMap(acCenterIconBox, "icon");
+					addChildtoMap(acCenterIconBox, "box");
+				}else{
+					removeChildfromMap(acCenterIconBox, "icon");
+					removeChildfromMap(acCenterIconBox, "box");
+				}
+			}
+			// 지구정압기 표시
+			private function showRegion():void
+			{
+				if(chk_region.selected){
+					addChildtoMap(acRegionIconBox, "icon");
+					addChildtoMap(acRegionIconBox, "box");
+				}else{
+					removeChildfromMap(acRegionIconBox, "icon");
+					removeChildfromMap(acRegionIconBox, "box");
+				}
+			}
+			// 지역정압기 표시
+			private function showLocation():void
+			{
+				if(chk_location.selected){
+					addChildtoMap(acLocationIconBox, "icon");
+					addChildtoMap(acLocationIconBox, "box");
+				}else{
+					removeChildfromMap(acLocationIconBox, "icon");
+					removeChildfromMap(acLocationIconBox, "box");
+				}
+			}
+			// Endline 표시
+			private function showEndline():void
+			{
+				if(chk_endline.selected){
+					addChildtoMap(acEndlineIconBox, "icon");
+					addChildtoMap(acEndlineIconBox, "box");
+				}else{
+					removeChildfromMap(acEndlineIconBox, "icon");
+					removeChildfromMap(acEndlineIconBox, "box");
+				}
+			}
+			// 정류기 표시
+			private function showRectifier():void
+			{
+				if(chk_rectifier.selected){
+					// addChildtoMap(acRectifierIconBox, "polygon");
+					addChildtoMap(acRectifierIconBox, "icon");
+					addChildtoMap(acRectifierIconBox, "box");
+				}else{
+					// removeChildfromMap(acRectifierIconBox, "polygon");
+					removeChildfromMap(acRectifierIconBox, "icon");
+					removeChildfromMap(acRectifierIconBox, "box");
+				}
+			} // 배류기
+			private function showDrainage():void
+			{
+				if(chk_drainage.selected){
+					//addChildtoMap(acDrainageIconBox, "polygon");
+					addChildtoMap(acDrainageIconBox, "icon");
+					addChildtoMap(acDrainageIconBox, "box");
+				}else{
+					//removeChildfromMap(acDrainageIconBox, "polygon");
+					removeChildfromMap(acDrainageIconBox, "icon");
+					removeChildfromMap(acDrainageIconBox, "box");
+				}
+			} 
+			// 전류
+			private function showEleccurr():void
+			{
+				if(chk_eleccurr.selected){
+					addChildtoMap(acEleccurrIconBox, "icon");
+					addChildtoMap(acEleccurrIconBox, "box");
+				}else{
+					removeChildfromMap(acEleccurrIconBox, "icon");
+					removeChildfromMap(acEleccurrIconBox, "box");
+				}
+			} 
+			// MOV
+			private function showMov():void
+			{
+				if(chk_mov.selected){
+					addChildtoMap(acMovIconBox, "icon");
+					addChildtoMap(acMovIconBox, "box");
+				}else{
+					removeChildfromMap(acMovIconBox, "icon");
+					removeChildfromMap(acMovIconBox, "box");
+				}
+			} 
+			// RPC
+			private function showRpc():void
+			{
+				if(chk_rpc.selected){
+					addChildtoMap(acRpcIconBox, "icon");
+					addChildtoMap(acRpcIconBox, "box");
+				}else{
+					removeChildfromMap(acRpcIconBox, "icon");
+					removeChildfromMap(acRpcIconBox, "box");
+				}
+			} 
+			
+			
+			
+			//----------- 알람 표시. ----------------------------------------------------------------------
+			
+			private function clickHandler_Alarm(event:ItemClickEvent):void
+			{
+				displayPolygonIconBox();
+			}
+			
+			
+			//------------------------------------------------------------------------------------------------------------------
+			
+			private function listenerMouseClick(event:MouseEvent):void
+			{
+				mx.controls.Alert.show(event.localX.toFixed() + ',' + event.localY.toFixed());
+			}
+			
+			protected function _onPan():void
+			{
+				drawIndexViewBox();
+			}
+			
+			//----------------- 인텍스맵 ----------------------------------------------------------------------------------------------
+			
+			private function drawIndexViewBox(pt:Point=null):void{
+				
+				var panzoomWidth:Number = this.panzoom.width;
+				var panzoomHeight:Number = this.panzoom.height;
+				
+				var panHorizontalScrollBarWidth:Number = this.panzoom.panHorizontalScrollBar.width;
+				var panVerticalScrollBarHeight:Number = this.panzoom.panVerticalScrollBar.height;
+				
+				var panHorizontalScrollBarX:Number = 0;
+				var panHorizontalScrollBarY:Number = 0;
+				
+				if(pt == null){ // Panning , indexMap이동
+					panHorizontalScrollBarX = this.panzoom.panHorizontalScrollBar.scrollPosition;
+					panHorizontalScrollBarY = this.panzoom.panVerticalScrollBar.scrollPosition;
+				}else{ // indexMap 강제이동
+					panHorizontalScrollBarX = pt.x - (panzoomWidth/2);
+					panHorizontalScrollBarY = pt.y - (panzoomHeight/2);
+				}
+				
+				
+				var indexX:Number =   (panHorizontalScrollBarX * indexMap.width) / this.panzoom.content.width;
+				var indexY:Number =   (panHorizontalScrollBarY * indexMap.height) / this.panzoom.content.height;
+				
+				var indexBoxWidth:Number = (panzoomWidth * indexMap.width) / this.panzoom.content.width - 2;
+				var indexBoxHeight:Number =   (panzoomHeight * indexMap.height) / this.panzoom.content.height - 2;
+				
+				
+				// indexMap [VIEW BOX] 그리기
+				if(indexViewBox)
+					indexMap.removeElement(indexViewBox);
+				
+				indexViewBox = new UIComponent();
+				indexViewBox.graphics.beginFill(0xFF8080, 0.2); // 반투명하게 
+				indexViewBox.graphics.lineStyle(2, 0x004080); 
+				indexViewBox.graphics.drawRect(indexX, indexY, indexBoxWidth, indexBoxHeight);
+				indexViewBox.graphics.endFill();
+				indexMap.addElement(indexViewBox);
+				
+			
+			}
+			
+			public function listenerMouseOver(event:MouseEvent):void{
+				//mx.controls.Alert.show(' img.width:' + img.width + ',img.height:' + img.height);
+			}
+			
+			public function listenerMouseMove_PanZoom(event:MouseEvent):void
+			{
+				var pt:Point = Utils.convertToGeo(event.currentTarget.mouseX, event.currentTarget.mouseY);
+				
+				//lblMsg.text = "x:" + event.currentTarget.mouseX.toFixed() + ", y:" + event.currentTarget.mouseY.toFixed() + " , " +
+				lblCoord.text = "X: " + pt.x.toFixed(2) + " , Y: " + pt.y.toFixed(2);
+				
+			}
+			
+			public function listenerMouseMove_Image(event:MouseEvent):void{
+				
+				//this.panzoom.content.cursorManager.removeCursor(CursorManager.getInstance().currentCursorID);
+			}
+			
+			public function listenerMouseClick_imgLocal(event:MouseEvent):void{
+				
+				imgLocal.cursorManager.removeAllCursors();
+			}
+			
+			public function listenerMouseMove_imgLocal(event:MouseEvent):void{
+				//imgLocal.cursorManager.removeCursor(CursorManager.getInstance().currentCursorID);
+				imgLocal.cursorManager.removeAllCursors();
+			}
+			
+			//------------------------- indexMap Mouse Event ----------------------------------------------------------------------------
+			
+			public function listenerMouseDown_indexMap(event:MouseEvent):void
+			{
+				var indexX:Number = event.localX;
+				var indexY:Number = event.localY;
+				
+				var panzoomX:Number = (event.localX * this.panzoom.content.width) / indexMap.width;
+				var panzoomY:Number = (event.localY * this.panzoom.content.height) / indexMap.height;
+				
+				this.panzoom.zoomToPoint(new Point(panzoomX, panzoomY), 1);
+			}
+			
+			public function listenerMouseUp_indexMap(event:MouseEvent):void
+			{
+				drawIndexViewBox();
+			}
+			
+			
+			
+			// ----------------------------  Get File List (Web Service)  ---------------------------------------------------------------------------------------
+			
+//			private function GetPictureList_Result(event:ResultEvent):void 
+//			{
+//				
+//				acFileInfo = (event.result.NewDataSet.Table is ArrayCollection) ?
+//					event.result.NewDataSet.Table as ArrayCollection :
+//					new ArrayCollection(ArrayUtil.toArray(event.result.NewDataSet.Table));
+//			}	
+//			
+//			private function GetPictureList_Fault(event:FaultEvent):void 
+//			{
+//				Alert.show('웹서비스 호출 오류가 발생했습니다.');
+//			}
+			
+//			private function doubleClick_lstFile(event:Event):void
+//			{
+//				//mx.controls.Alert.show(lstFile.selectedItem.SAVENAME);
+//				
+//				imgUpload.source = "http://localhost/PictureUpload/Pictures/" + lstFile.selectedItem.SAVENAME;
+//			}
+			
+			// ----------------------------  File Upload   ---------------------------------------------------------------------------------------
+			
+			private var imageTypes:FileFilter = new FileFilter("Images(*.jpg, *.jpeg, *.gif, *.png)", "*.jpg; *.jpeg; *.gif; *.png");
+			private var allTypes:Array = new Array(imageTypes);
+			private var fileRef:FileReference = new FileReference();
+			
+			private function uploadPicture():void
+			{
+				if(bLogin)
+				{
+					try{
+						fileRef.addEventListener(Event.SELECT, selectHandler);
+						fileRef.addEventListener(Event.COMPLETE, completeHandler);
+						fileRef.addEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
+						var success:Boolean = fileRef.browse(allTypes);
+					}catch(error:Error){
+						//trace("selectHandler error");
+					}
+				}
+				else
+				{
+					Alert.show('로그인이 필요합니다');
+				}
+			}
+			private function selectHandler(event:Event):void 
+			{
+				var request:URLRequest = new URLRequest("http://"+serverIP+"/PictureUpload/Upload.aspx?gubun="+this.gubun+"&eqid="+this.eqid);
+				try {
+					fileRef.upload(request);
+				} catch (error:Error) {
+					//trace("Unable to upload file.");
+				}
+			}
+			// 파일업로드
+			private function completeHandler(event:Event):void 
+			{
+				getPictureList(this.eqid, this.gubun); // 업로드 성공, 사진정보 refresh
+			}
+			
+			private function ioErrorHandler(event:IOErrorEvent):void
+			{
+				mx.controls.Alert.show("IO ERROR : " + event.text);
+			}
+			// 사진삭제
+			private function deletePicture():void
+			{
+				if(bLogin)
+				{
+					var selectedFile:String = "";
+					
+					for(var i:int=0; i<acFileInfo.length; i++){
+						if(chkFile[i].selected){
+							selectedFile += chkFile[i].data + "|";
+						}
+					}
+					
+					if(selectedFile != ""){
+						// 화면삭제
+						lblPictureName.text = "";
+						imgUpload.source = null;
+						
+						// 파일삭제
+						var httpService:HTTPService = new HTTPService();
+						httpService.url = "http://"+serverIP+"/PictureUpload/GetPictureList.aspx?eqid="+this.eqid+"&gubun="+this.gubun + "&files=" + selectedFile;
+						httpService.addEventListener(FaultEvent.FAULT, faultHandler_getPicture);
+						httpService.addEventListener(ResultEvent.RESULT, getPictureLoadXmlComplete);
+						httpService.send();
+						
+					}else{
+						Alert.show('삭제할 파일을 선택하세요');
+					}
+				}
+				else
+				{
+					Alert.show('로그인이 필요합니다');
+				}
+			}
+			// 사진보기
+			private function clickHandler_lstFile(event:MouseEvent):void
+			{
+				var lst:mx.controls.List = event.currentTarget as mx.controls.List;
+				var saveName:String = lst.selectedItem.SAVENAME as String;
+				
+				imgUpload.source = "http://"+serverIP+"/PictureUpload/Pictures/" + this.gubun + "/" + this.eqid + "/" + saveName;
+				
+				var fileName:String = lst.selectedItem.FILENAME as String;
+				lblPictureName.text = "파일명: " + fileName;
+			}
+			
+			// 시설물정보 수정
+			private function clickHandler_saveEquipInfo(event:Event):void
+			{
+				if(bLogin)
+					update_EquipInfo();
+				else
+					Alert.show('로그인이 필요합니다');
+			}
+			// 좌표, 라벨정보, 관련정류기(location, eleccurr일때만) DB수정
+			private function update_EquipInfo():void
+			{
+				var x:String = HMI_XGIS.text;
+				var y:String = HMI_YGIS.text;
+				var label:String = cobLabel.selectedItem.data;
+				
+				var httpService:HTTPService = new HTTPService();
+				httpService.url = "http://"+serverIP+"/FlexQuery/ChangeEquipInfo.aspx?eqid="+this.eqid+"&gubun="+this.gubun+"&x="+x+"&y="+y+"&label="+label;
+				if(this.gubun=="location" || this.gubun=="eleccurr")
+				{
+					httpService.url += "&rectifierid="+cboRectifier.selectedItem.EQID+
+						"&rectifierid2="+cboRectifier2.selectedItem.EQID+
+						"&rectifierid3="+cboRectifier3.selectedItem.EQID+
+						"&rectifierid4="+cboRectifier4.selectedItem.EQID;
+				}
+				httpService.addEventListener(FaultEvent.FAULT, faultHandler_update_EquipInfo);
+				httpService.addEventListener(ResultEvent.RESULT, changeEquipInfoLoadXmlComplete);
+				
+				var param:Object = new Object();
+				param.dummy = Math.random()*99999999;
+				httpService.send(param);
+			}
+			// 정보수정
+			private function changeEquipInfoLoadXmlComplete(event:ResultEvent):void
+			{
+				if(event.result.Result != null)
+				{
+					var result:String = event.result.Result;
+					if(result.toLowerCase()=="false" ) Alert.show("권한이 없습니다. 로그인을 해주세요");
+					else if(result=="1") Alert.show("DB의 시설물정보를 수정하였습니다");
+					else Alert.show("에러! DB의 시설물정보 수정오류입니다");
+				}
+			}
+			
+			// 정보수정 콤보박스 수정할때 내용변경 막음.
+			private function changeHandler_cboRectifier(event:Event):void
+			{
+				bChangeCboRectifier = false;
+			}
+			
+			//--------------------------- 웹 호출에러 ------------------------------------------------------
+			private function faultHandler_update_EquipInfo(event:FaultEvent):void 
+			{
+				debugMsg("웹정보 호출에러 : update_EquipInfo() => 시설정보수정");
+			}
+			private function faultHandler_getPicture(event:FaultEvent):void 
+			{
+				debugMsg("웹정보 호출에러 : getPicture() => 사진정보 가져오기");
+			}
+			private function faultHandler_loadXmlData(event:FaultEvent):void 
+			{
+				debugMsg("웹정보 호출에러 : loadXmlData() => SCADA_DATA.xml 로드에러! xml데이타 위치를 확인해주세요!");
+				
+				//loadXmlData();
+			}
+			private function faultHandler_checkSession(event:FaultEvent):void 
+			{
+				debugMsg("웹정보 호출에러 : checkSession() => 세션체크");
+			}
+			
+			//--------------------------- 디버그 윈도우 제어 ------------------------------------------------------
+			
+			private function startDragdebugWindow(event:MouseEvent):void{
+				if(event.currentTarget.mouseY < 30)
+					windebug.startDrag();
+			}
+			private function stopDragdebugWindow(event:MouseEvent):void{
+				windebug.stopDrag();
+			}
+			
+			private function closedebugWindow(event:CloseEvent):void{
+				windebug.visible = false; 
+			}
+			
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Style>
+		@namespace panzoom "org.rockholla.controls.panzoom.*";
+		@namespace s "library://ns.adobe.com/flex/spark";
+		@namespace mx "library://ns.adobe.com/flex/mx";
+		
+		.redBox
+		{
+			backgroundColor: #ff0000;
+		}
+		.yellowBox
+		{
+			backgroundColor: #ffff00;
+		}
+		
+	</fx:Style>
+	<fx:Declarations>
+		<mx:Rotate id="rotate1" angleFrom="0" angleTo="90" duration="0"/>
+		<mx:Rotate id="rotate2" angleFrom="0" angleTo="360" duration="1000"/>
+		<mx:Rotate id="rotate3" angleFrom="0" angleTo="360" duration="1000"/>
+		
+		<mx:Move id="hideEffect" xTo="0" />
+		<mx:Move id="showEffect" xFrom="100" />
+	</fx:Declarations>
+	
+	<!-- 지도 -->
+	<panzoom:PanZoomComponent id="panzoom" 			  
+							  y="30" width="100%" height="100%" 
+							  childPreventsPan="false"
+							  zoomToCursor="false"
+							  initialZoomLevel="1"
+							  panScrollBarsVisible="false"
+							  mouseWheelZoomingEnabled="false" 
+							  fixedZoomPoint="{null}"
+							  pan="this._onPan()"
+							  >
+		<local:CustomPanZoomContent   id="customPanZoomContent"  mouseMove="listenerMouseMove_PanZoom(event)"  />
+		
+	</panzoom:PanZoomComponent>
+	
+	<!-- 상단바 -->
+	<mx:HBox top="0" left="0"  width="100%" height="30"   backgroundColor="#e7e7e7" verticalAlign="middle"  >
+		<s:Spacer width="20" />
+		<s:Label text="축적: " styleName="myFontStyle12" doubleClickEnabled="true" doubleClick="doubleClickHandler_Scale(event)" />
+		<mx:HBox horizontalGap="2" verticalAlign="middle" horizontalAlign="center">
+			<mx:ToggleButtonBar id="btnScale" itemClick="clickHandler_ScaleButton(event)" selectedButtonTextStyleName="selectedToggleButtonText"   >
+				<mx:dataProvider>
+					<s:ArrayCollection>
+						<fx:String>10만</fx:String>
+						<fx:String>5만</fx:String>
+						<fx:String>1만</fx:String>
+					</s:ArrayCollection>
+				</mx:dataProvider>
+			</mx:ToggleButtonBar>
+		</mx:HBox>
+		<s:Spacer width="20" />
+		<s:CheckBox id="chk_polygon" selected="false" click="showPolygon()"/><s:Label text="정류기 범위보기"  width="100" styleName="myFontStyle11" /> 
+		<s:Spacer width="20" />
+		<s:Label id="lblCoord"   />
+		<s:Spacer width="20" />
+		<s:Label id="lblMsg"  styleName="myFontStyle12" />
+	</mx:HBox>
+	
+	
+	<!-- 인덱스맵 -->
+	<mx:VBox id="indexBox" top="30" width="150" verticalAlign="top" verticalGap="0" horizontalAlign="center" >
+		<s:BorderContainer id="indexMap" 
+						   borderColor="#888888" 
+						   borderAlpha="1" 
+						   borderVisible="true"
+						   backgroundImageFillMode="scale" 
+						   backgroundAlpha="1"
+						   mouseDown="listenerMouseDown_indexMap(event)"
+						   mouseUp="listenerMouseUp_indexMap(event)">
+			<mx:Image id="indexImage"  />
+		</s:BorderContainer>
+	</mx:VBox>
+	
+	<!-- 범례 -->
+	<mx:Panel id="panel_legend"  x="-240" y="250" width="270" height="300" backgroundColor="0xffffff" headerHeight="0" >
+		<mx:HBox width="100%" height="100%" verticalAlign="top" horizontalGap="0" >
+			<mx:VBox width="100%" height="100%" verticalAlign="top" verticalGap="3" horizontalAlign="left" backgroundColor="0xffffff" 
+					 paddingTop="5" paddingLeft="5" paddingRight="5" paddingBottom="5">
+				<mx:HBox width="100%" horizontalAlign="left" horizontalGap="0" verticalAlign="middle" >
+					<mx:Image source="{editMarkerTool}" />
+					<s:Label text="시설물" styleName="myFontStyle12" />
+				</mx:HBox>	
+				<mx:Tile direction="horizontal" width="100%" height="100%" horizontalGap="0" horizontalAlign="left"  styleName="myFontStyle12" 
+						  borderStyle="solid" cornerRadius="5" borderVisible="true" borderColor="#A4A4A4" 
+						  paddingLeft="5" paddingTop="5" paddingBottom="5">
+					<s:CheckBox id="chk_center" label="센 타" selected="true" click="showCenter()"/> 
+					<s:CheckBox id="chk_region" label="지 구" selected="true" click="showRegion()"/>
+					<s:CheckBox id="chk_location" label="지 역" selected="true" click="showLocation()"/>  
+					<s:CheckBox id="chk_endline" label="관 말" selected="true" click="showEndline()" /> 
+					<s:CheckBox id="chk_rectifier" label="정류기" selected="true" click="showRectifier()" />  
+					<s:CheckBox id="chk_drainage" label="배류기" selected="true" click="showDrainage()" />  
+					<s:CheckBox id="chk_eleccurr" label="전류전위" selected="true" click="showEleccurr()"  />  
+					<s:CheckBox id="chk_mov" label="MOV" selected="true" click="showMov()" />  
+					<s:CheckBox id="chk_rpc" label="RPC" selected="true" click="showRpc()" />  
+				</mx:Tile>
+				
+				<mx:HBox width="100%" horizontalAlign="left" horizontalGap="0" verticalAlign="middle" >
+					<mx:Image source="{editMarkerTool}" />
+					<s:Label text="조회데이타" styleName="myFontStyle12" />
+				</mx:HBox>	
+				<mx:ViewStack id="vsData" width="100%" height="100%" >
+					<mx:Tile id="boxCheckData" direction="horizontal"  width="100%" height="100%" horizontalGap="0" horizontalAlign="left"  styleName="myFontStyle12" 
+							 borderStyle="solid" cornerRadius="5" borderVisible="true" borderColor="#A4A4A4" 
+							 paddingLeft="5" paddingTop="5" paddingBottom="5">
+						<s:CheckBox id="val_pres1" label="1차" selected="true" click="show_value(event)"/> 
+						<s:CheckBox id="val_pres2" label="2차" selected="true"  click="show_value(event)"/>  
+						<s:CheckBox id="val_filt" label="필터" selected="true" click="show_value(event)"/>  
+						<s:CheckBox id="val_elec" label="전위" selected="true"  click="show_value(event)"/>  
+						<s:CheckBox id="val_eleccurr" label="전류" selected="true"   click="show_value(event)"/> 
+						<s:CheckBox id="val_elecvolt" label="전압" selected="true"  click="show_value(event)"/>  
+						<s:CheckBox id="val_mov" label="MOV" selected="true"   click="show_value(event)" />  
+						<s:CheckBox id="val_endpres" label="관말압력" selected="true"   click="show_value(event)" />
+					</mx:Tile>
+					<mx:Tile  id="boxRadioData" direction="horizontal"  width="100%" height="100%" horizontalGap="0" horizontalAlign="left"  styleName="myFontStyle12" 
+							  borderStyle="solid" cornerRadius="5" borderVisible="true" borderColor="#A4A4A4" 
+							  paddingLeft="5" paddingTop="5" paddingBottom="5">
+						<s:RadioButtonGroup id="rdoData" itemClick="clickHandler_Data(event)" />
+						<s:RadioButton groupName="rdoData" label="1차"  value="pres1" /> 
+						<s:RadioButton groupName="rdoData" label="2차"  value="pres2"  />  
+						<s:RadioButton groupName="rdoData" label="필터"  value="filt" />  
+						<s:RadioButton groupName="rdoData" label="전위" value="elec"  /> 
+						<s:RadioButton groupName="rdoData" label="전류"  value="eleccurr"  /> 
+						<s:RadioButton groupName="rdoData" label="전압" value="elecvolt"  />  
+						<s:RadioButton groupName="rdoData" label="MOV"  value="mov2"   />  
+						<s:RadioButton groupName="rdoData" label="관말압력"  value="endpres"   />  
+					</mx:Tile>
+				</mx:ViewStack>
+				<!--알람기능선택-->
+				
+				<mx:HBox width="100%" horizontalAlign="left" horizontalGap="0" verticalAlign="middle" >
+					<mx:Image source="{editMarkerTool}" />
+					<s:Label text="알람기능선택" styleName="myFontStyle12" />
+				</mx:HBox>	
+				<mx:Tile direction="horizontal"  width="100%" height="58" horizontalGap="10" horizontalAlign="left"  styleName="myFontStyle12" 
+						 borderStyle="solid" cornerRadius="5" borderVisible="true" borderColor="#A4A4A4" 
+						 paddingLeft="5" paddingTop="5" >
+					<s:RadioButtonGroup id="rdoAlarm" itemClick="clickHandler_Alarm(event) "/>
+					<s:RadioButton label="일반" groupName="rdoAlarm" id="rdoGeneral"  value="general"  selected="true" /> 
+					<s:RadioButton label="1차" groupName="rdoAlarm" id="rdoPres1"  value="pres1" />  
+					<s:RadioButton label="2차" groupName="rdoAlarm" id="rdoPres2"  value="pres2" />
+					<s:RadioButton label="필터" groupName="rdoAlarm" id="rdofilt" value="essential" /> 
+					<s:RadioButton label="전위" groupName="rdoAlarm" id="rdoElec"  value="elec" />  
+					<s:RadioButton label="전류" groupName="rdoAlarm" id="rdoElecCurr"  value="eleccurr" />  
+					<s:RadioButton label="전압" groupName="rdoAlarm" id="rdoElecVolt" value="elecvolt" />
+				</mx:Tile>
+			</mx:VBox>
+			<s:Label width="30" height="{panel_legend.height-3}" click="showLegend()" text="범     례" styleName="myFontStyle5"  textAlign="center" creationCompleteEffect="{rotate1}"   verticalAlign="middle" backgroundColor="#efefef" />
+		</mx:HBox>
+	</mx:Panel>
+	
+	<!-- 팝업 : 시설물정보 -->
+	<mx:TitleWindow  id="panel_popup"  title="시설물 데이타"
+					 width="800" height="450"			 
+					 visible="false" verticalScrollPolicy="off" horizontalScrollPolicy="off" 
+					 paddingLeft="10" paddingRight="10" paddingTop="10" paddingBottom="10"
+					 showCloseButton="true"  close="panel_popup_close(event)"
+					 fontSize="14" fontWeight="bold"
+					 mouseDown="cover_mouseDownHandler(event)" mouseUp="cover_mouseUpHandler(event)" >
+		<mx:TabNavigator id="tabNavigator"  width="100%" tabWidth="120" tabHeight="20" fontSize="12" fontWeight="bold" >
+			<!-- HMI -->
+			<mx:VBox id="boxHmi" label="HMI " paddingLeft="10" paddingBottom="10" paddingRight="10" height="360" >
+			</mx:VBox>
+			<!-- 사진정보 -->
+			<mx:HBox id="pictureHmi" label="사진정보" paddingLeft="10" paddingBottom="10" paddingRight="10" height="360" >
+				<mx:VBox height="100%" width="180" verticalAlign="top">
+					<!-- 사진버튼 -->
+					<mx:HBox width="100%">
+						<mx:Button id="btnUploadFile" label="사진올리기" click="uploadPicture()" />
+						<mx:Button id="btnDeleteFile" label="삭제" click="deletePicture()" />
+					</mx:HBox>
+					<!-- 사진리스트 -->
+					<mx:HBox width="100%" height="100%" horizontalGap="0" borderVisible="true" borderStyle="solid" >
+						<mx:VBox id="vboxCheckFile" width="16" height="100%" paddingTop="2" >
+							<mx:Repeater id="rptFile" dataProvider="{acFileInfo}">
+								<mx:CheckBox id="chkFile" data="{rptFile.currentItem.SAVENAME}"  />
+							</mx:Repeater>
+						</mx:VBox>
+						<mx:List id="lstFile" width="100%" height="100%" dataProvider="{acFileInfo}" labelField="FILENAME"   
+								 click="clickHandler_lstFile(event)" borderVisible="false" />
+					</mx:HBox>
+				</mx:VBox>
+				<!-- 사진보기 -->
+				<mx:VBox height="100%" width="100%" verticalAlign="top">
+					<mx:HBox width="100%">
+						<mx:Label id="lblPictureName" /> <!-- 파일명 -->
+					</mx:HBox>
+					<mx:Box id="boxPic" width="560" height="320" borderStyle="solid" borderVisible="true" verticalAlign="middle" horizontalAlign="center"
+							 verticalScrollPolicy="auto" horizontalScrollPolicy="auto">
+						<mx:Image id="imgUpload" />
+					</mx:Box>
+				</mx:VBox>
+			</mx:HBox>
+			<!-- 정보수정 -->
+			<mx:VBox id="infoHmi" label="정보수정" paddingLeft="10" paddingBottom="10" paddingRight="10" height="360" >
+				<mx:HBox width="100%" height="300">
+					<pkg1:TitledBorderBox title="지도좌표값(TM)" width="250" height="120">
+						<mx:Form>
+							<mx:FormItem label="X좌표:" >
+								<mx:TextInput id="HMI_XGIS" width="150" />
+							</mx:FormItem>
+							<mx:FormItem label="Y좌표:" >
+								<mx:TextInput id="HMI_YGIS" width="150" />
+							</mx:FormItem>
+						</mx:Form>
+					</pkg1:TitledBorderBox>
+					<pkg1:TitledBorderBox title="라벨" width="200" height="120">
+						<mx:Form>
+							<mx:FormItem label="라벨위치:" >
+								<mx:ComboBox id="cobLabel" >
+									<mx:ArrayCollection id="acLabel">
+										<fx:Object label="오른쪽" data="RIGHT" />
+										<fx:Object label="왼쪽" data="LEFT" />
+										<fx:Object label="위쪽" data="UP" />
+										<fx:Object label="아래쪽" data="DOWN" />
+									</mx:ArrayCollection>
+								</mx:ComboBox>
+							</mx:FormItem>
+						</mx:Form>
+					</pkg1:TitledBorderBox>
+					<mx:ViewStack id="vsInfo" >
+						<pkg1:TitledBorderBox  title="관련된 정류기(배류기)" width="250" height="180" >
+							<mx:Form>
+								<mx:FormItem label="정류기명1:" >
+									<mx:ComboBox id="cboRectifier" labelField="EQNAME" change="changeHandler_cboRectifier(event)"   width="120"  />
+								</mx:FormItem>
+								<mx:FormItem label="정류기명2:" >
+									<mx:ComboBox id="cboRectifier2" labelField="EQNAME" change="changeHandler_cboRectifier(event)"   width="120"  />
+								</mx:FormItem>
+								<mx:FormItem label="정류기명3:" >
+									<mx:ComboBox id="cboRectifier3" labelField="EQNAME" change="changeHandler_cboRectifier(event)"   width="120"  />
+								</mx:FormItem>
+								<mx:FormItem label="정류기명4:" >
+									<mx:ComboBox id="cboRectifier4" labelField="EQNAME" change="changeHandler_cboRectifier(event)"   width="120"  />
+								</mx:FormItem>
+							</mx:Form>
+						</pkg1:TitledBorderBox> 
+						<pkg1:TitledBorderBox  title="관련 정압기" width="150" height="180" 
+											   paddingLeft="10" paddingTop="10" paddingRight="10" paddingBottom="10" >
+							<!--<mx:VBox id="boxLocationEleccurrList" width="100" height="100" 
+									 borderColor="0xefefef" borderVisible="true" borderStyle="solid" verticalScrollPolicy="auto" />-->
+							<mx:List id="lstLocationEleccurr" width="100%" height="100%" dataProvider="{acList}" />
+						</pkg1:TitledBorderBox>
+					</mx:ViewStack>
+				</mx:HBox>
+					
+				<mx:HBox width="100%" horizontalAlign="center">
+					<mx:Button id="btnChangeInfo" label="수정하기" click="clickHandler_saveEquipInfo(event)" />
+				</mx:HBox>
+			</mx:VBox>
+		</mx:TabNavigator>
+	</mx:TitleWindow>
+	
+	
+	<mx:TitleWindow id="windebug" x="100" y="300" width="500" height="500" 
+				 title="디버깅 메시지" showCloseButton="true" visible="false"
+				 close="closedebugWindow(event)"
+					mouseDown="startDragdebugWindow(event)" 
+				 mouseUp="stopDragdebugWindow(event)" >
+		<s:List id="lstMsg" dataProvider="{lstAC}" width="100%" height="100%"   styleName="myFontStyle11"  >
+			<s:layout>
+				<s:VerticalLayout  gap="0" />
+			</s:layout>
+		</s:List>
+	</mx:TitleWindow>
+	
+</s:Application>
